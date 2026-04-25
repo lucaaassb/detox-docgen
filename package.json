@@ -1,0 +1,60 @@
+{
+  "name": "detox-docgen",
+  "version": "0.1.0",
+  "description": "Automatically generates documentation from Detox (React Native E2E) test files. Markdown, folder split, and PDF output.",
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "bin": {
+    "detox-docgen": "dist/cli.js",
+    "detox-docgen-folder": "dist/cli-folder.js",
+    "detox-docgen-pdf": "dist/pdf-cli.js",
+    "detox-docgen-pdf-folder": "dist/pdf-cli-folder.js"
+  },
+  "files": [
+    "dist",
+    "README.md",
+    "LICENSE"
+  ],
+  "scripts": {
+    "build": "tsc",
+    "prepublishOnly": "npm run test && npm run build",
+    "test": "vitest run",
+    "test:watch": "vitest"
+  },
+  "keywords": [
+    "detox",
+    "react-native",
+    "e2e",
+    "documentation",
+    "test",
+    "generator",
+    "ast"
+  ],
+  "author": "Lucas Soares Barros, Lucas Caldas Barbosa de Souza",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/lucascaldasb/detox-docgen.git"
+  },
+  "engines": {
+    "node": ">=20.0.0"
+  },
+  "dependencies": {
+    "@babel/generator": "^7.28.0",
+    "@babel/parser": "^7.28.0",
+    "@babel/traverse": "^7.28.0",
+    "@babel/types": "^7.28.0",
+    "commander": "^13.0.0",
+    "fast-xml-parser": "^4.5.0",
+    "fast-glob": "^3.3.3",
+    "ignore": "^7.0.0",
+    "puppeteer": "^24.22.0"
+  },
+  "devDependencies": {
+    "@types/babel__generator": "^7.6.8",
+    "@types/babel__traverse": "^7.20.0",
+    "@types/node": "^22.0.0",
+    "typescript": "^5.8.0",
+    "vitest": "^3.0.0"
+  }
+}
