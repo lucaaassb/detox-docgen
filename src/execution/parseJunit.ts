@@ -38,11 +38,25 @@ function mapTestcase(
   if (name == null) return null;
   const t = num(attr(o, 'time', 'time'), 0);
   const cls = (attr(o, 'classname', 'classname') ?? suiteName ?? '') as string;
-  const failure = o.failure ?? o['@_failure'];
+  const failure = o.failure ?? o.error ?? o['@_failure'];
   let message: string | undefined;
   if (typeof failure === 'string') message = failure;
-  else if (failure && typeof failure === 'object' && (failure as { '#text'?: string })['#text']) {
-    message = String((failure as { '#text'?: string })['#text']);
+  else if (Array.isArray(failure)) {
+    message = failure
+      .map((x) => {
+        if (typeof x === 'string') return x;
+        if (x && typeof x === 'object') {
+          const item = x as Record<string, unknown>;
+          return item['#text'] ?? item['@_message'] ?? item.message;
+        }
+        return undefined;
+      })
+      .filter(Boolean)
+      .join('\n');
+  } else if (failure && typeof failure === 'object') {
+    const item = failure as Record<string, unknown>;
+    const text = item['#text'] ?? item['@_message'] ?? item.message;
+    if (text) message = String(text);
   }
   const skipped = o.skipped != null;
   return {

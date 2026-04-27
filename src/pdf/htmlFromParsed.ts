@@ -73,6 +73,119 @@ export function generateTestDocumentationHTML(
   return b;
 }
 
+function escInlineMarkdown(s: string): string {
+  return esc(s)
+    .replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>')
+    .replace(/\*(.*?)\*/g, '<em>$1</em>')
+    .replace(/`([^`]+)`/g, '<code>$1</code>');
+}
+
+function splitTableCells(line: string): string[] {
+  const cells: string[] = [];
+  let cell = '';
+  const body = line.slice(1, -1);
+  for (let i = 0; i < body.length; i += 1) {
+    const ch = body[i];
+    if (ch === '|' && body[i - 1] !== '\\') {
+      cells.push(cell.trim().replace(/\\\|/g, '|'));
+      cell = '';
+    } else {
+      cell += ch;
+    }
+  }
+  cells.push(cell.trim().replace(/\\\|/g, '|'));
+  return cells;
+}
+
+export function markdownToHtmlDocument(markdown: string, title: string): string {
+  const css = `
+  body { font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; line-height:1.5; margin:40px; color:#333; }
+  h1 { color:#2c3e50; border-bottom:3px solid #3498db; padding-bottom:10px; }
+  h2 { color:#34495e; border-left:4px solid #3498db; padding-left:12px; margin-top:28px; }
+  h3, h4, h5, h6 { color:#2c3e50; margin-top:20px; }
+  table { width:100%; border-collapse:collapse; margin:12px 0 18px; font-size:13px; }
+  th, td { border:1px solid #d7dee8; padding:7px 9px; text-align:left; vertical-align:top; }
+  th { background:#edf3f8; }
+  code { background:#f1f3f5; border-radius:4px; padding:1px 4px; font-family: Consolas, monospace; font-size: 12px; }
+  li { margin:4px 0; }
+  hr { border:0; border-top:1px solid #d7dee8; margin:24px 0; }
+  @media print { h1, h2, h3 { page-break-after: avoid; } table, ul { page-break-inside: avoid; } }`;
+
+  const out: string[] = [];
+  let inUl = false;
+  let inTable = false;
+  const closeBlocks = () => {
+    if (inUl) {
+      out.push('</ul>');
+      inUl = false;
+    }
+    if (inTable) {
+      out.push('</tbody></table>');
+      inTable = false;
+    }
+  };
+
+  for (const rawLine of markdown.split(/\r?\n/)) {
+    const line = rawLine.trimEnd();
+    if (!line.trim()) {
+      if (inUl) {
+        out.push('</ul>');
+        inUl = false;
+      }
+      continue;
+    }
+    if (/^---+$/.test(line.trim())) {
+      closeBlocks();
+      out.push('<hr/>');
+      continue;
+    }
+    const heading = /^(#{1,6})\s+(.*)$/.exec(line);
+    if (heading) {
+      closeBlocks();
+      const level = heading[1].length;
+      out.push(`<h${level}>${escInlineMarkdown(heading[2])}</h${level}>`);
+      continue;
+    }
+    if (line.startsWith('|') && line.endsWith('|')) {
+      if (/^\|[-\s|:]+$/.test(line)) continue;
+      if (!inTable) {
+        if (inUl) {
+          out.push('</ul>');
+          inUl = false;
+        }
+        out.push('<table><tbody>');
+        inTable = true;
+      }
+      const cells = splitTableCells(line);
+      out.push('<tr>' + cells.map((c) => `<td>${escInlineMarkdown(c)}</td>`).join('') + '</tr>');
+      continue;
+    }
+    if (line.startsWith('- ')) {
+      if (inTable) {
+        out.push('</tbody></table>');
+        inTable = false;
+      }
+      if (!inUl) {
+        out.push('<ul>');
+        inUl = true;
+      }
+      out.push(`<li>${escInlineMarkdown(line.slice(2))}</li>`);
+      continue;
+    }
+    closeBlocks();
+    out.push(`<p>${escInlineMarkdown(line)}</p>`);
+  }
+  closeBlocks();
+
+  return '<!doctype html><html><head><meta charset="utf-8"><title>' +
+    esc(title) +
+    '</title><style>' +
+    css +
+    '</style></head><body>' +
+    out.join('\n') +
+    '</body></html>';
+}
+
 export function getPdfFileNameForDir(
   projectRoot: string,
   dirPathRelative: string

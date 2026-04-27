@@ -31,7 +31,7 @@ export async function generateSingleDoc(workingDir: string = process.cwd()): Pro
       console.warn(`Aviso: não foi possível analisar JUnit: ${j}`, e);
     }
   }
-  const projectName = path.basename(workingDir);
+  const projectName = config.projectName || path.basename(workingDir);
   const md = buildTestDocumentation(
     parsed,
     allJunit,
@@ -42,7 +42,12 @@ export async function generateSingleDoc(workingDir: string = process.cwd()): Pro
       totalTestFiles: testFiles.length,
       totalTests
     },
-    projectName
+    {
+      projectName,
+      version: config.version,
+      responsible: config.responsible,
+      environment: config.environment
+    }
   );
   const out = path.join(workingDir, config.outputFile);
   fs.writeFileSync(out, md, 'utf8');
@@ -80,7 +85,7 @@ export async function generateFolderDocs(workingDir: string = process.cwd()): Pr
       console.warn(`Aviso JUnit: ${j}`, e);
     }
   }
-  const projectName = path.basename(workingDir);
+  const projectName = config.projectName || path.basename(workingDir);
   for (const [d, files] of byDir) {
     const parsed: IParsedTestFile[] = files.map((p) =>
       normalizeParsed(parseDetoxTestFile(p, workingDir))
@@ -97,7 +102,12 @@ export async function generateFolderDocs(workingDir: string = process.cwd()): Pr
         totalTestFiles: files.length,
         totalTests
       },
-      projectName
+      {
+        projectName,
+        version: config.version,
+        responsible: config.responsible,
+        environment: config.environment
+      }
     );
     const fileName = d === 'root' ? 'root.md' : `${d.replace(/[/\\]+/g, '-')}.md`;
     fs.writeFileSync(path.join(outDir, fileName), md, 'utf8');

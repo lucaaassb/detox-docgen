@@ -57,7 +57,8 @@ await generateSingleDoc('/caminho/do/projecto');
 
 ## Configuração (opcional)
 
-- Ficheiro opcional: `detox-docgen.config.cjs` ou `.detox-docgenrc.cjs` com `export default { testGlob, outputFile, folderOutputDir, pdfOutputDir }`. Por omissão, o `testGlob` inclui `e2e/**/*.{js,jsx,ts,tsx}` e ficheiros cujo nome segue `*.e2e.*`, `*.spec.*` ou `*.test.*`.
+- Ficheiro opcional: `detox-docgen.config.cjs` ou `.detox-docgenrc.cjs` com `module.exports = { testGlob, outputFile, folderOutputDir, pdfOutputDir, projectName, version, responsible, environment }`. Por omissão, o `testGlob` inclui `e2e/**/*.{js,jsx,ts,tsx}` e ficheiros cujo nome segue `*.e2e.*`, `*.spec.*` ou `*.test.*`.
+- `projectName` e `version` podem ser inferidos do `package.json`; `responsible` e `environment` enriquecem o cabeçalho do relatório para uso por QA/CI.
 - `.detox-docgenignore` — padrão estilo `.gitignore` em caminhos relativos.
 
 ## JUnit (relatório de execução)

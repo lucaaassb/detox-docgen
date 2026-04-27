@@ -50,4 +50,10 @@ export type DetoxDocgenUserConfig = {
   outputFile?: string;
   folderOutputDir?: string;
   pdfOutputDir?: string;
+  projectName?: string;
+  version?: string;
+  responsible?: string;
+  environment?: string;
 };
+
+export type DetoxDocgenResolvedConfig = Required<DetoxDocgenUserConfig>;

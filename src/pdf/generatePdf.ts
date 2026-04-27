@@ -2,10 +2,56 @@ import path from 'path';
 import puppeteer from 'puppeteer';
 import { findTestFiles } from '../scanner/findTestFiles';
 import { loadUserConfig } from '../config';
-import { parseDetoxTestFile } from '../parser/parseDetoxFile';
+import { parseDetoxTestFile, sumFileStats } from '../parser/parseDetoxFile';
+import { normalizeParsed } from '../normalizer';
 import { IParsedTestFile } from '../types';
-import { generateTestDocumentationHTML, getPdfFileNameForDir } from './htmlFromParsed';
+import { markdownToHtmlDocument, getPdfFileNameForDir } from './htmlFromParsed';
 import { ensureDirSync } from '../scanner/findTestFiles';
+import { buildTestDocumentation } from '../renderer/markdown';
+import { findJunitFiles, parseJunitFile } from '../execution/parseJunit';
+import { IFlattenedJunit } from '../execution/types';
+
+async function loadJunitRows(workingDir: string): Promise<IFlattenedJunit[]> {
+  const rows: IFlattenedJunit[] = [];
+  for (const j of await findJunitFiles(workingDir)) {
+    try {
+      rows.push(...parseJunitFile(j));
+    } catch (e) {
+      console.warn(`Aviso JUnit: ${j}`, e);
+    }
+  }
+  return rows;
+}
+
+function reportMetadata(config: ReturnType<typeof loadUserConfig>, workingDir: string) {
+  return {
+    projectName: config.projectName || path.basename(workingDir),
+    version: config.version,
+    responsible: config.responsible,
+    environment: config.environment
+  };
+}
+
+function buildMarkdownReport(
+  parsed: IParsedTestFile[],
+  junitRows: IFlattenedJunit[],
+  metadata: ReturnType<typeof reportMetadata>
+): string {
+  const statsAgg = sumFileStats(parsed);
+  const totalTests = parsed.reduce((a, f) => a + f.its.length, 0);
+  return buildTestDocumentation(
+    parsed,
+    junitRows,
+    {
+      spec: statsAgg.spec,
+      e2e: statsAgg.e2e,
+      test: statsAgg.test,
+      totalTestFiles: parsed.length,
+      totalTests
+    },
+    metadata
+  );
+}
 
 export async function generateSinglePDF(workingDir: string = process.cwd()): Promise<void> {
   const config = loadUserConfig(workingDir);
@@ -17,9 +63,11 @@ export async function generateSinglePDF(workingDir: string = process.cwd()): Pro
       console.log('Nenhum ficheiro de teste Detox encontrado.');
       return;
     }
-    const parsed: IParsedTestFile[] = testFiles.map((p) => parseDetoxTestFile(p, workingDir));
-    const projectName = path.basename(workingDir);
-    const html = generateTestDocumentationHTML(parsed, projectName);
+    const parsed: IParsedTestFile[] = testFiles.map((p) =>
+      normalizeParsed(parseDetoxTestFile(p, workingDir))
+    );
+    const markdown = buildMarkdownReport(parsed, await loadJunitRows(workingDir), reportMetadata(config, workingDir));
+    const html = markdownToHtmlDocument(markdown, 'Detox E2E - Documentacao');
     const browser = await puppeteer.launch({
       headless: true,
       args: ['--no-sandbox', '--disable-setuid-sandbox']
@@ -63,10 +111,16 @@ export async function generateFolderPDFs(workingDir: string = process.cwd()): Pr
     const outRoot = path.join(workingDir, config.pdfOutputDir);
     ensureDirSync(outRoot);
     for (const [d, files] of byDir) {
-      const parsed: IParsedTestFile[] = files.map((p) => parseDetoxTestFile(p, workingDir));
-      const projectName = path.basename(workingDir);
-      const display = d === 'root' ? projectName : projectName + ' / ' + d;
-      const html = generateTestDocumentationHTML(parsed, display);
+      const parsed: IParsedTestFile[] = files.map((p) =>
+        normalizeParsed(parseDetoxTestFile(p, workingDir))
+      );
+      const metadata = reportMetadata(config, workingDir);
+      const display = d === 'root' ? metadata.projectName : metadata.projectName + ' / ' + d;
+      const markdown = buildMarkdownReport(parsed, d === 'root' ? await loadJunitRows(workingDir) : [], {
+        ...metadata,
+        projectName: display
+      });
+      const html = markdownToHtmlDocument(markdown, 'Detox E2E - Documentacao');
       const browser = await puppeteer.launch({
         headless: true,
         args: ['--no-sandbox', '--disable-setuid-sandbox']
