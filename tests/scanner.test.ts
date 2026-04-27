@@ -1,0 +1,30 @@
+import fs from 'fs';
+import os from 'os';
+import path from 'path';
+import { describe, expect, it } from 'vitest';
+import { findTestFiles } from '../src/scanner/findTestFiles';
+
+function tempProject(): string {
+  return fs.mkdtempSync(path.join(os.tmpdir(), 'detox-docgen-scanner-'));
+}
+
+describe('findTestFiles', () => {
+  it('respects file naming convention and .detox-docgenignore', async () => {
+    const dir = tempProject();
+    try {
+      const e2e = path.join(dir, 'e2e');
+      const ignored = path.join(e2e, 'ignored');
+      fs.mkdirSync(ignored, { recursive: true });
+      fs.writeFileSync(path.join(e2e, 'login.e2e.ts'), 'it("x", () => {})', 'utf8');
+      fs.writeFileSync(path.join(e2e, 'helper.ts'), 'export const x = 1', 'utf8');
+      fs.writeFileSync(path.join(ignored, 'pay.e2e.ts'), 'it("y", () => {})', 'utf8');
+      fs.writeFileSync(path.join(dir, '.detox-docgenignore'), 'e2e/ignored/**', 'utf8');
+
+      const files = await findTestFiles(dir, 'e2e/**/*.{ts,tsx}');
+
+      expect(files.map((f) => path.basename(f))).toEqual(['login.e2e.ts']);
+    } finally {
+      fs.rmSync(dir, { recursive: true, force: true });
+    }
+  });
+});
