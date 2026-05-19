@@ -6,7 +6,7 @@ const program = new Command();
 program
   .name('detox-docgen-pdf')
   .description('Gera spec-docs.pdf a partir de testes Detox')
-  .argument('[dir]', 'Directório do projecto (omissão: cwd)', process.cwd())
+  .argument('[dir]', 'Diretório do projeto (omissão: cwd)', process.cwd())
   .action(async (dir: string) => {
     await generateSinglePDF(dir);
   });

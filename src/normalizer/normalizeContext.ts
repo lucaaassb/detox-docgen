@@ -88,7 +88,7 @@ export function normalizeTestContext(ctx: ITestContext, emptyStepWarnings: Set<s
 
 /**
  * Percorre a árvore em profundidade-primeiro (nested antes dos testes do nível),
- * alinhado à ordem típica de leitura de `describe` aninhados no ficheiro.
+ * alinhado à ordem típica de leitura de `describe` aninhados no arquivo.
  */
 export function collectItTitlesInTreeOrder(ctx: ITestContext): string[] {
   const out: string[] = [];

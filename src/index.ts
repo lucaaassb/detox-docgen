@@ -14,7 +14,7 @@ export async function generateSingleDoc(workingDir: string = process.cwd()): Pro
   const config = loadUserConfig(workingDir);
   const testFiles = await findTestFiles(workingDir, config.testGlob);
   if (testFiles.length === 0) {
-    console.log('Nenhum ficheiro de teste Detox encontrado com os padrões configurados.');
+    console.log('Nenhum arquivo de teste Detox encontrado com os padrões configurados.');
     return;
   }
   const parsed: IParsedTestFile[] = testFiles.map((p) =>
@@ -53,10 +53,10 @@ export async function generateSingleDoc(workingDir: string = process.cwd()): Pro
   fs.writeFileSync(out, md, 'utf8');
   console.log(`✅ ${config.outputFile} gerado.`);
   console.log(
-    `Ficheiros: ${testFiles.length}, testes: ${totalTests} (e2e:${statsAgg.e2e} spec:${statsAgg.spec} test:${statsAgg.test})`
+    `Arquivos: ${testFiles.length}, testes: ${totalTests} (e2e:${statsAgg.e2e} spec:${statsAgg.spec} test:${statsAgg.test})`
   );
   if (allJunit.length) {
-    console.log(`Relatório JUnit: ${allJunit.length} caso(s) de teste (de ${junitPaths.length} ficheiro(s)).`);
+    console.log(`Relatório JUnit: ${allJunit.length} caso(s) de teste (de ${junitPaths.length} arquivo(s)).`);
   }
 }
 
@@ -64,7 +64,7 @@ export async function generateFolderDocs(workingDir: string = process.cwd()): Pr
   const config = loadUserConfig(workingDir);
   const testFiles = await findTestFiles(workingDir, config.testGlob);
   if (testFiles.length === 0) {
-    console.log('Nenhum ficheiro de teste Detox encontrado.');
+    console.log('Nenhum arquivo de teste Detox encontrado.');
     return;
   }
   const byDir = new Map<string, string[]>();
@@ -112,7 +112,7 @@ export async function generateFolderDocs(workingDir: string = process.cwd()): Pr
     const fileName = d === 'root' ? 'root.md' : `${d.replace(/[/\\]+/g, '-')}.md`;
     fs.writeFileSync(path.join(outDir, fileName), md, 'utf8');
   }
-  console.log(`✅ Documentação por pasta em ${outDir} (${byDir.size} ficheiro(s)).`);
+  console.log(`✅ Documentação por pasta em ${outDir} (${byDir.size} arquivo(s)).`);
 }
 
 export { parseDetoxTestFile } from './parser/parseDetoxFile';

@@ -256,7 +256,7 @@ export function parseDetoxTestFile(absoluteFilePath: string, cwd: string = proce
     const cr = getCallRootName(call.callee as t.Expression);
     if (!cr) continue;
     if (cr.root === 'describe' && cr.isEach) {
-      warnings.push('describe.each (nível de ficheiro): suporte parcial; documente com JSDoc.');
+      warnings.push('describe.each (nível de arquivo): suporte parcial; documente com JSDoc.');
       continue;
     }
     if (isDescribeName(cr.root, cr.isEach)) {
@@ -271,7 +271,7 @@ export function parseDetoxTestFile(absoluteFilePath: string, cwd: string = proce
         rootCtx.name = title;
         contexts.push(rootCtx);
       } else {
-        warnings.push('describe (nível de ficheiro) sem callback de bloco.');
+        warnings.push('describe (nível de arquivo) sem callback de bloco.');
       }
     }
   }
@@ -283,7 +283,7 @@ export function parseDetoxTestFile(absoluteFilePath: string, cwd: string = proce
       const m = getCallRootName(call.callee as t.Expression);
       if (!m || !isItRoot(m.root, m.isEach)) continue;
       if (m.isEach) {
-        warnings.push('it.each (nível de ficheiro): suporte parcial.');
+        warnings.push('it.each (nível de arquivo): suporte parcial.');
         continue;
       }
       const title = getStringArg(call.arguments[0] as t.Expression, warnings) ?? 'Test';

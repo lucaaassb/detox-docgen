@@ -41,7 +41,7 @@ export interface IParsedTestFile {
     e2e: number;
     test: number;
   };
-  /** Preenchido pelo normalizador a partir da extensão do ficheiro. */
+  /** Preenchido pelo normalizador a partir da extensão do arquivo. */
   sourceKind?: SourceKind;
 }
 

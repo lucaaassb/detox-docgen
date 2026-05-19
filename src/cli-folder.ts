@@ -5,8 +5,8 @@ import { generateFolderDocs } from './index';
 const program = new Command();
 program
   .name('detox-docgen-folder')
-  .description('Gera spec-docs-folder/ com um .md por directório de testes')
-  .argument('[dir]', 'Directório do projecto (omissão: cwd)', process.cwd())
+  .description('Gera spec-docs-folder/ com um .md por diretório de testes')
+  .argument('[dir]', 'Diretório do projeto (omissão: cwd)', process.cwd())
   .action(async (dir: string) => {
     await generateFolderDocs(dir);
   });

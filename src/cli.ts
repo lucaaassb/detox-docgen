@@ -6,7 +6,7 @@ const program = new Command();
 program
   .name('detox-docgen')
   .description('Gera spec-docs.md a partir de testes Detox (E2E)')
-  .argument('[dir]', 'Directório do projecto (omissão: cwd)', process.cwd())
+  .argument('[dir]', 'Diretório do projeto (omissão: cwd)', process.cwd())
   .action(async (dir: string) => {
     await generateSingleDoc(dir);
   });

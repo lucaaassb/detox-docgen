@@ -1,5 +1,5 @@
 /**
- * @description Ficheiro de exemplo para testes de documentação
+ * @description Arquivo de exemplo para testes de documentação
  * @author Time QA
  */
 describe('Login', () => {

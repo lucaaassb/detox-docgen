@@ -61,14 +61,14 @@ export async function generateSinglePDF(workingDir: string = process.cwd()): Pro
     process.chdir(workingDir);
     const testFiles = await findTestFiles(workingDir, config.testGlob);
     if (testFiles.length === 0) {
-      console.log('Nenhum ficheiro de teste Detox encontrado.');
+      console.log('Nenhum arquivo de teste Detox encontrado.');
       return;
     }
     const parsed: IParsedTestFile[] = testFiles.map((p) =>
       normalizeParsed(parseDetoxTestFile(p, workingDir))
     );
     const markdown = buildMarkdownReport(parsed, await loadJunitRows(workingDir), reportMetadata(config, workingDir));
-    const html = markdownToHtmlDocument(markdown, 'Detox E2E - Documentacao');
+    const html = markdownToHtmlDocument(markdown, 'Detox E2E - Documentação');
     const browser = await puppeteer.launch({
       headless: true,
       args: ['--no-sandbox', '--disable-setuid-sandbox']
@@ -85,7 +85,7 @@ export async function generateSinglePDF(workingDir: string = process.cwd()): Pro
     await browser.close();
     const n = parsed.reduce((a, f) => a + f.its.length, 0);
     console.log('✅ spec-docs.pdf gerado com sucesso.');
-    console.log(`Ficheiros: ${testFiles.length}, testes (it): ${n}.`);
+    console.log(`Arquivos: ${testFiles.length}, testes (it): ${n}.`);
   } finally {
     process.chdir(originalCwd);
   }
@@ -99,7 +99,7 @@ export async function generateFolderPDFs(workingDir: string = process.cwd()): Pr
     process.chdir(workingDir);
     const testFiles = await findTestFiles(workingDir, config.testGlob);
     if (testFiles.length === 0) {
-      console.log('Nenhum ficheiro de teste Detox encontrado.');
+      console.log('Nenhum arquivo de teste Detox encontrado.');
       return;
     }
     const byDir = new Map<string, string[]>();
@@ -122,7 +122,7 @@ export async function generateFolderPDFs(workingDir: string = process.cwd()): Pr
         ...metadata,
         projectName: display
       });
-      const html = markdownToHtmlDocument(markdown, 'Detox E2E - Documentacao');
+      const html = markdownToHtmlDocument(markdown, 'Detox E2E - Documentação');
       const browser = await puppeteer.launch({
         headless: true,
         args: ['--no-sandbox', '--disable-setuid-sandbox']
@@ -139,9 +139,9 @@ export async function generateFolderPDFs(workingDir: string = process.cwd()): Pr
       });
       await browser.close();
       const n = parsed.reduce((a, f) => a + f.its.length, 0);
-      console.log(`✅ ${name} — ${files.length} ficheiro(s), ${n} teste(s).`);
+      console.log(`✅ ${name} — ${files.length} arquivo(s), ${n} teste(s).`);
     }
-    console.log(`📄 PDFs em ${outRoot} (${byDir.size} directório(s)).`);
+    console.log(`📄 PDFs em ${outRoot} (${byDir.size} diretório(s)).`);
   } finally {
     process.chdir(originalCwd);
   }

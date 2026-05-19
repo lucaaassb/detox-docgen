@@ -1,6 +1,6 @@
 # detox-docgen
 
-Ferramenta em TypeScript que gera **documentação a partir de testes [Detox](https://wix.github.io/Detox/)** (E2E em React Native), ficheiro único Markdown, saída por directório, PDF opcional (Puppeteer) e seção opcional de **relatório de execução** a partir de ficheiros **JUnit** (por exemplo `jest-junit`).
+Ferramenta em TypeScript que gera **documentação a partir de testes [Detox](https://wix.github.io/Detox/)** (E2E em React Native), arquivo único Markdown, saída por diretório, PDF opcional (Puppeteer) e seção opcional de **relatório de execução** a partir de arquivos **JUnit** (por exemplo `jest-junit`).
 
 O **normalizador** (`src/normalizer/`) transforma o resultado do parser num modelo interno estável: textos e metadados JSDoc com espaços colapsados, *hooks* na ordem canónica (`beforeAll` → `beforeEach` → `afterEach` → `afterAll`), deduplicação de avisos, lista `its` alinhada à árvore de suítes, caminhos em POSIX, `sourceKind` (`javascript` / `typescript` / `tsx`) inferido pela extensão, e aviso quando um teste não tem passos nem `@description`.
 
@@ -12,7 +12,7 @@ npm install --save-dev detox-docgen
 
 ## Utilização (CLI)
 
-No directório do projecto (onde vivem `e2e/`, `package.json`, etc.):
+No diretório do projeto (onde vivem `e2e/`, `package.json`, etc.):
 
 ```bash
 # Um único spec-docs.md
@@ -52,18 +52,18 @@ import {
   generateFolderPDFs
 } from 'detox-docgen';
 
-await generateSingleDoc('/caminho/do/projecto');
+await generateSingleDoc('/caminho/do/projeto');
 ```
 
 ## Configuração (opcional)
 
-- Ficheiro opcional: `detox-docgen.config.cjs` ou `.detox-docgenrc.cjs` com `module.exports = { testGlob, outputFile, folderOutputDir, pdfOutputDir, projectName, version, responsible, environment }`. Por omissão, o `testGlob` inclui `e2e/**/*.{js,jsx,ts,tsx}` e ficheiros cujo nome segue `*.e2e.*`, `*.spec.*` ou `*.test.*`.
+- Arquivo opcional: `detox-docgen.config.cjs` ou `.detox-docgenrc.cjs` com `module.exports = { testGlob, outputFile, folderOutputDir, pdfOutputDir, projectName, version, responsible, environment }`. Por omissão, o `testGlob` inclui `e2e/**/*.{js,jsx,ts,tsx}` e arquivos cujo nome segue `*.e2e.*`, `*.spec.*` ou `*.test.*`.
 - `projectName` e `version` podem ser inferidos do `package.json`; `responsible` e `environment` enriquecem o cabeçalho do relatório para uso por QA/CI.
 - `.detox-docgenignore` — padrão estilo `.gitignore` em caminhos relativos.
 
 ## JUnit (relatório de execução)
 
-Se existirem ficheiros `**/junit.xml`, `**/e2e-junit.xml` ou similares (muito comum com *jest-junit*), a seção inicial do Markdown agrega contagem, tabela e falhas. Sem esses ficheiros, a documentação mostra só a parte extraída do **código-fonte** dos testes.
+Se existirem arquivos `**/junit.xml`, `**/e2e-junit.xml` ou similares (muito comum com *jest-junit*), a seção inicial do Markdown agrega contagem, tabela e falhas. Sem esses arquivos, a documentação mostra só a parte extraída do **código-fonte** dos testes.
 
 ## O que é extraído
 

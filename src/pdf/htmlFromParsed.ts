@@ -59,8 +59,8 @@ export function generateTestDocumentationHTML(
   @media print { h1 { page-break-after: avoid; } .context-section { page-break-inside: avoid; } }`;
 
   let b = '';
-  b += '<!doctype html><html><head><meta charset="utf-8"><title>Detox E2E — Documentação</title><style>' + css + '</style></head><body>';
-  b += '<h1>Detox E2E — Documentação de testes</h1><p>Projecto: <strong>' + esc(projectName) + '</strong></p><hr/>';
+  b += '<!doctype html><html><head><meta charset="utf-8"><title>Detox E2E - Documentação</title><style>' + css + '</style></head><body>';
+  b += '<h1>Detox E2E - Documentação de testes</h1><p>Projeto: <strong>' + esc(projectName) + '</strong></p><hr/>';
 
   for (const f of parsedFiles) {
     b += '<h2>' + esc(f.fileName) + '</h2>';
@@ -104,12 +104,15 @@ export function markdownToHtmlDocument(markdown: string, title: string): string 
     font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
     line-height:1.5;
     margin:0;
+    padding:0 40px 34px;
     color:#243042;
     background:#f5f7fb;
+    box-sizing:border-box;
   }
-  body > * { margin-left:40px; margin-right:40px; }
+  *, *::before, *::after { box-sizing:inherit; }
+  body > * { margin-left:0; margin-right:0; }
   h1 {
-    margin:0 0 26px;
+    margin:0 -40px 26px;
     padding:38px 40px 34px;
     color:#fff;
     background:linear-gradient(135deg, #123f6d 0%, #2563eb 52%, #13a39a 100%);
@@ -129,7 +132,7 @@ export function markdownToHtmlDocument(markdown: string, title: string): string 
     color:#123f6d;
     border-left:6px solid #13a39a;
     padding:8px 0 8px 14px;
-    margin-top:30px;
+    margin:30px 0 12px;
     background:#e9f5ff;
   }
   h3, h4, h5, h6 { color:#1f4f7a; margin-top:20px; }
@@ -147,10 +150,23 @@ export function markdownToHtmlDocument(markdown: string, title: string): string 
   th { background:#123f6d; color:#fff; font-weight:700; }
   tr:nth-child(even) td { background:#f8fbff; }
   tr:last-child td { border-bottom:0; }
-  code { background:#eef6ff; border:1px solid #cfe3f9; border-radius:4px; padding:1px 4px; font-family: Consolas, monospace; font-size: 12px; color:#143f63; }
+  code {
+    display:inline-block;
+    max-width:100%;
+    overflow-wrap:anywhere;
+    background:#eef6ff;
+    border:1px solid #9fc8ef;
+    border-left:4px solid #2563eb;
+    border-radius:4px;
+    padding:2px 6px;
+    font-family: Consolas, 'Courier New', monospace;
+    font-size: 12px;
+    line-height:1.35;
+    color:#143f63;
+  }
   li { margin:4px 0; }
   p { margin-top:8px; margin-bottom:8px; }
-  hr { border:0; border-top:2px solid #f59e0b; margin:26px 40px; }
+  hr { border:0; border-top:2px solid #f59e0b; margin:26px 0; }
   @media print {
     body { background:#fff; }
     h1, h2, h3 { page-break-after: avoid; }
