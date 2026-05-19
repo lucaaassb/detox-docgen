@@ -119,7 +119,7 @@ function collectTestRows(files: IParsedTestFile[]): TestRow[] {
 
 function summarizeCodeList(items: string[], emptyLabel: string): string {
   if (!items.length) return emptyLabel;
-  return items.map((s, index) => `Código ${index + 1}: \`${mdCode(s)}\``).join('; ');
+  return items.map((s, index) => `Código ${index + 1}: \`${mdCode(s)}\``).join(' ');
 }
 
 function testStatus(
