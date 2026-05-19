@@ -1,4 +1,4 @@
-import { IParsedTestFile, ITestContext } from '../types';
+import { IParsedTestFile, ITestCaseDetail, ITestContext } from '../types';
 import { IFlattenedJunit } from '../execution/types';
 import { aggregateJunit } from '../execution/parseJunit';
 
@@ -10,6 +10,21 @@ export type ReportMetadata = {
 };
 
 type JunitIndex = Map<string, IFlattenedJunit[]>;
+
+type TestRow = {
+  fileName: string;
+  suiteName: string;
+  title: string;
+  steps: string[];
+  expectations: string[];
+  metadata: ITestCaseDetail['metadata'];
+};
+
+type SelectorRow = {
+  selector: string;
+  type: string;
+  fileName: string;
+};
 
 export function formatDurationSeconds(sec: number): string {
   const t = Math.floor(sec);
@@ -30,21 +45,222 @@ function mdCode(s: string): string {
   return s.replace(/`/g, '\\`').replace(/\r?\n/g, ' ');
 }
 
-function anchorFor(s: string): string {
-  return s
-    .toLowerCase()
-    .normalize('NFD')
-    .replace(/[\u0300-\u036f]/g, '')
-    .replace(/[^a-z0-9\s-]/g, '')
-    .trim()
-    .replace(/\s+/g, '-');
-}
-
 function stateLabel(state: IFlattenedJunit['state']): string {
   if (state === 'passed') return 'OK';
   if (state === 'failed') return 'Falha';
   if (state === 'skipped') return 'Ignorado';
   return 'Desconhecido';
+}
+
+function generationDateString(): string {
+  const d = new Date();
+  return `${String(d.getDate()).padStart(2, '0')}/${String(d.getMonth() + 1).padStart(
+    2,
+    '0'
+  )}/${d.getFullYear()}`;
+}
+
+function sourceKindLabel(kind: string | undefined): string {
+  if (kind === 'typescript' || kind === 'tsx') return 'TypeScript';
+  if (kind === 'javascript') return 'JavaScript';
+  return '-';
+}
+
+function countSuites(ctxs: ITestContext[]): number {
+  let total = 0;
+  for (const ctx of ctxs) {
+    total += 1;
+    total += countSuites(ctx.nested ?? []);
+  }
+  return total;
+}
+
+function countHooks(ctxs: ITestContext[]): number {
+  let total = 0;
+  for (const ctx of ctxs) {
+    total += ctx.hooks?.length ?? 0;
+    total += countHooks(ctx.nested ?? []);
+  }
+  return total;
+}
+
+function collectTestRows(files: IParsedTestFile[]): TestRow[] {
+  const rows: TestRow[] = [];
+  const visit = (file: IParsedTestFile, ctx: ITestContext) => {
+    for (const c of ctx.testCases ?? []) {
+      rows.push({
+        fileName: file.fileName,
+        suiteName: ctx.name,
+        title: c.title,
+        steps: c.steps,
+        expectations: c.expectations,
+        metadata: c.metadata
+      });
+    }
+    if (!ctx.testCases?.length) {
+      for (const title of ctx.tests ?? []) {
+        rows.push({
+          fileName: file.fileName,
+          suiteName: ctx.name,
+          title,
+          steps: [],
+          expectations: [],
+          metadata: {}
+        });
+      }
+    }
+    for (const nested of ctx.nested ?? []) visit(file, nested);
+  };
+  for (const file of files) {
+    for (const ctx of file.contexts) visit(file, ctx);
+  }
+  return rows;
+}
+
+function summarizeCodeList(items: string[], emptyLabel: string): string {
+  if (!items.length) return emptyLabel;
+  return items.map((s) => `\`${mdCode(s)}\``).join('<br>');
+}
+
+function testStatus(
+  junitIndex: JunitIndex,
+  suiteName: string,
+  title: string
+): string {
+  const execution = findJunitMatch(junitIndex, suiteName, title);
+  return execution ? stateLabel(execution.state) : 'Mapeado';
+}
+
+function extractSelectorsFromCode(code: string, fileName: string): SelectorRow[] {
+  const rows: SelectorRow[] = [];
+  const re = /\bby\.(id|text|label|type|traits|value)\(\s*(['"`])([^'"`]+)\2\s*\)/g;
+  let match: RegExpExecArray | null;
+  while ((match = re.exec(code)) !== null) {
+    rows.push({
+      selector: match[3],
+      type: `by.${match[1]}`,
+      fileName
+    });
+  }
+  return rows;
+}
+
+function collectSelectors(rows: TestRow[]): SelectorRow[] {
+  const seen = new Set<string>();
+  const out: SelectorRow[] = [];
+  for (const row of rows) {
+    for (const code of [...row.steps, ...row.expectations]) {
+      for (const selector of extractSelectorsFromCode(code, row.fileName)) {
+        const key = `${selector.type}\0${selector.selector}\0${selector.fileName}`;
+        if (seen.has(key)) continue;
+        seen.add(key);
+        out.push(selector);
+      }
+    }
+  }
+  return out;
+}
+
+function buildCover(
+  files: IParsedTestFile[],
+  stats: { totalTestFiles: number; totalTests: number },
+  metadata: ReportMetadata
+): string {
+  let m = '# Documentacao de Testes Automatizados E2E com Detox\n\n';
+  m += `**Projeto:** ${mdText(metadata.projectName)}\n\n`;
+  m += '**Framework:** Detox\n\n';
+  m += '**Tipo de teste:** End-to-End Mobile\n\n';
+  m += `**Total de arquivos analisados:** ${stats.totalTestFiles}\n\n`;
+  m += `**Total de cenarios mapeados:** ${stats.totalTests}\n\n`;
+  m += `**Data de geracao:** ${generationDateString()}\n\n`;
+  const languages = Array.from(new Set(files.map((f) => sourceKindLabel(f.sourceKind)).filter((x) => x !== '-')));
+  if (languages.length) m += `**Linguagem:** ${mdText(languages.join(', '))}\n\n`;
+  m += '---\n\n';
+  return m;
+}
+
+function buildSummaryCards(
+  files: IParsedTestFile[],
+  stats: { totalTestFiles: number; totalTests: number }
+): string {
+  const suites = files.reduce((acc, f) => acc + countSuites(f.contexts), 0);
+  const hooks = files.reduce((acc, f) => acc + countHooks(f.contexts), 0);
+  const languages = Array.from(new Set(files.map((f) => sourceKindLabel(f.sourceKind)).filter((x) => x !== '-')));
+  let m = '## Cards de resumo\n\n';
+  m += '| Metrica | Valor |\n';
+  m += '| --- | ---: |\n';
+  m += `| Arquivos de teste | ${stats.totalTestFiles} |\n`;
+  m += `| Suites encontradas | ${suites} |\n`;
+  m += `| Testes mapeados | ${stats.totalTests} |\n`;
+  m += `| Hooks identificados | ${hooks} |\n`;
+  m += '| Framework | Detox |\n';
+  m += `| Linguagem | ${mdText(languages.join(', ') || '-')} |\n\n`;
+  return m;
+}
+
+function buildStatusTable(rows: TestRow[], junitIndex: JunitIndex): string {
+  let m = '## Status dos testes\n\n';
+  m += '| Teste | Status |\n';
+  m += '| --- | --- |\n';
+  for (const row of rows) {
+    m += `| ${mdText(row.title)} | ${testStatus(junitIndex, row.suiteName, row.title)} |\n`;
+  }
+  m += '\n';
+  return m;
+}
+
+function buildSelectorsTable(rows: TestRow[]): string {
+  const selectors = collectSelectors(rows);
+  let m = '## Seletores usados\n\n';
+  if (!selectors.length) {
+    m += 'Nenhum seletor Detox foi identificado automaticamente nos passos mapeados.\n\n';
+    return m;
+  }
+  m += '| Selector | Tipo | Arquivo |\n';
+  m += '| --- | --- | --- |\n';
+  for (const s of selectors) {
+    m += `| \`${mdCode(s.selector)}\` | \`${mdCode(s.type)}\` | \`${mdCode(s.fileName)}\` |\n`;
+  }
+  m += '\n';
+  return m;
+}
+
+function buildCoverageTable(rows: TestRow[]): string {
+  const byFeature = new Map<string, { fileName: string; count: number }>();
+  for (const row of rows) {
+    const feature = row.metadata.screen || row.suiteName;
+    const key = `${feature}\0${row.fileName}`;
+    const current = byFeature.get(key) ?? { fileName: row.fileName, count: 0 };
+    current.count += 1;
+    byFeature.set(key, current);
+  }
+
+  let m = '## Cobertura por tela / funcionalidade\n\n';
+  if (!byFeature.size) {
+    m += 'Nao foi possivel calcular cobertura porque nenhum cenario foi mapeado.\n\n';
+    return m;
+  }
+  m += '| Funcionalidade | Arquivo | Quantidade de testes |\n';
+  m += '| --- | --- | ---: |\n';
+  for (const [key, value] of byFeature) {
+    const [feature] = key.split('\0');
+    m += `| ${mdText(feature)} | \`${mdCode(value.fileName)}\` | ${value.count} |\n`;
+  }
+  m += '\n';
+  return m;
+}
+
+function buildAutomatedAnalysis(): string {
+  let m = '## Analise automatizada dos testes\n\n';
+  m += 'A ferramenta identificou automaticamente:\n\n';
+  m += '- Arquivos de teste Detox\n';
+  m += '- Suites de teste\n';
+  m += '- Cenarios definidos com it/test\n';
+  m += '- Hooks de configuracao\n';
+  m += '- Acoes executadas nos testes\n';
+  m += '- Validacoes realizadas com expect\n';
+  m += '- Seletores utilizados nos elementos da interface\n\n';
+  return m;
 }
 
 function buildJunitIndex(rows: IFlattenedJunit[]): JunitIndex {
@@ -90,37 +306,31 @@ function renderSuite(ctx: ITestContext, depth: number, junitIndex: JunitIndex): 
     m += '\n';
   }
   if (ctx.testCases && ctx.testCases.length) {
+    m += '| Cenario | Acoes executadas | Validacao esperada | Status |\n';
+    m += '| --- | --- | --- | --- |\n';
     for (const c of ctx.testCases) {
       const execution = findJunitMatch(junitIndex, ctx.name, c.title);
-      m += `#### ${mdText(c.title)}\n\n`;
-      if (execution) {
-        m += `**Execucao:** ${stateLabel(execution.state)} (${formatDurationSeconds(execution.timeSec)})\n\n`;
-      }
-      if (c.metadata.description) {
-        m += `*${mdText(c.metadata.description)}*\n\n`;
-      }
-      if (c.metadata.author) m += `**Autor (JSDoc):** ${mdText(c.metadata.author)}\n\n`;
-      if (c.metadata.screen) m += `**Tela:** ${mdText(c.metadata.screen)}\n\n`;
-      if (c.metadata.priority) m += `**Prioridade:** ${mdText(c.metadata.priority)}\n\n`;
-      if (c.steps.length) {
-        m += '**Passos (extraidos do corpo do teste):**\n\n';
-        for (const s of c.steps) {
-          m += `- \`${mdCode(s)}\`\n`;
-        }
-        m += '\n';
-      }
-      if (c.expectations.length) {
-        m += '**Expectativas (assert/expect):**\n\n';
-        for (const s of c.expectations) {
-          m += `- \`${mdCode(s)}\`\n`;
-        }
-        m += '\n';
-      }
+      const status = execution
+        ? `${stateLabel(execution.state)} (${formatDurationSeconds(execution.timeSec)})`
+        : 'Mapeado';
+      const details = [
+        c.metadata.description ? mdText(c.metadata.description) : '',
+        c.metadata.screen ? `Tela: ${mdText(c.metadata.screen)}` : '',
+        c.metadata.priority ? `Prioridade: ${mdText(c.metadata.priority)}` : '',
+        c.metadata.author ? `Autor: ${mdText(c.metadata.author)}` : ''
+      ].filter(Boolean);
+      const scenario = details.length ? `${mdText(c.title)}<br>${details.join('<br>')}` : mdText(c.title);
+      m += `| ${scenario} | ${summarizeCodeList(c.steps, 'Nenhuma acao inicial')} | ${summarizeCodeList(
+        c.expectations,
+        'Nenhuma validacao automatica identificada'
+      )} | ${status} |\n`;
     }
+    m += '\n';
   } else if (ctx.tests.length) {
-    m += '**Cenarios:**\n\n';
+    m += '| Cenario | Acoes executadas | Validacao esperada | Status |\n';
+    m += '| --- | --- | --- | --- |\n';
     for (const t of ctx.tests) {
-      m += `- ${mdText(t)}\n`;
+      m += `| ${mdText(t)} | Nenhuma acao inicial | Nenhuma validacao automatica identificada | Mapeado |\n`;
     }
     m += '\n';
   }
@@ -246,13 +456,16 @@ export function buildTestDocumentation(
       : projectNameOrMetadata;
   const junitIndex = buildJunitIndex(allRows);
   const hasJunit = allRows.length > 0;
-  let m = hasJunit ? buildExecutionReportJunit(allRows, metadata) : '';
-  if (!hasJunit) {
-    m = '# Documentacao de testes Detox (E2E)\n\n';
-    m += `**Projecto:** ${mdText(metadata.projectName)}\n\n`;
-  }
-  m += '## Resumo\n\n';
-  m += `- Ficheiros de teste: **${stats.totalTestFiles}**\n`;
+  const testRows = collectTestRows(files);
+  let m = buildCover(files, stats, metadata);
+  m += buildSummaryCards(files, stats);
+  m += buildStatusTable(testRows, junitIndex);
+  m += buildSelectorsTable(testRows);
+  m += buildCoverageTable(testRows);
+  m += buildAutomatedAnalysis();
+  if (hasJunit) m += buildExecutionReportJunit(allRows, metadata);
+  m += '## Resumo tecnico\n\n';
+  m += `- Arquivos de teste: **${stats.totalTestFiles}**\n`;
   m += `- Testes (it / test) enumerados: **${stats.totalTests}**\n`;
   if (allRows.length) {
     const a = aggregateJunit(allRows);
@@ -265,13 +478,6 @@ export function buildTestDocumentation(
   if (stats.spec) m += `- Padrao \`*.spec.*\`: **${stats.spec}** ficheiro(s)\n`;
   if (stats.test) m += `- Padrao \`*.test.*\`: **${stats.test}** ficheiro(s)\n`;
   m += '\n';
-  if (files.length) {
-    m += '## Sumario\n\n';
-    for (const f of files) {
-      m += `- [${mdText(f.fileName)}](#${anchorFor(`Ficheiro ${f.fileName}`)})\n`;
-    }
-    m += '\n';
-  }
   m += '---\n\n';
   for (const f of files) {
     m += renderFileSection(f, junitIndex);

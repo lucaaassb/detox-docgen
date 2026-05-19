@@ -191,7 +191,7 @@ export function parseDetoxTestFile(absoluteFilePath: string, cwd: string = proce
       if (isDescribeName(cr.root, cr.isEach)) {
         const title = getStringArg(call.arguments[0] as t.Expression, warnings);
         const sub = title ?? 'Suite';
-        const nextPath = parentPath ? `${parentPath} › ${sub}` : sub;
+        const nextPath = parentPath ? `${parentPath} > ${sub}` : sub;
         const cb = getDescribeCallback(call);
         if (cb && t.isBlockStatement(cb.body)) {
           const child = processSuiteBlock(cb.body, sub, nextPath);

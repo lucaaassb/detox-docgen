@@ -54,6 +54,7 @@ function buildMarkdownReport(
 }
 
 export async function generateSinglePDF(workingDir: string = process.cwd()): Promise<void> {
+  workingDir = path.resolve(workingDir);
   const config = loadUserConfig(workingDir);
   const originalCwd = process.cwd();
   try {
@@ -91,6 +92,7 @@ export async function generateSinglePDF(workingDir: string = process.cwd()): Pro
 }
 
 export async function generateFolderPDFs(workingDir: string = process.cwd()): Promise<void> {
+  workingDir = path.resolve(workingDir);
   const config = loadUserConfig(workingDir);
   const originalCwd = process.cwd();
   try {

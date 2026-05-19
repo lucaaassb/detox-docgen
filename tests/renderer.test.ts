@@ -51,9 +51,11 @@ describe('markdown renderer', () => {
     expect(md).toContain('| **Sistema**     | mobile-app |');
     expect(md).toContain('| **Versao**      | 1.2.3 |');
     expect(md).toContain('- Testes no JUnit: **1** (1 OK, 0 falha(s), 0 ignorado(s))');
-    expect(md).toContain('**Execucao:** OK (2s)');
+    expect(md).toContain('| deve abrir a tela<br>Tela: Login<br>Prioridade: alta | `await element(by.id(\'email\')).typeText(\'a@b.com\')` | `await expect(element(by.id(\'homeScreen\'))).toBeVisible()` | OK (2s) |');
+    expect(md).toContain('| `email` | `by.id` | `login.e2e.ts` |');
+    expect(md).toContain('| Login | `login.e2e.ts` | 1 |');
     expect(md).not.toContain('### Describe:');
-    expect(md).toContain('## Sumario');
+    expect(md).not.toContain('## Sumario');
   });
 
   it('escapes table pipes from JUnit values', () => {
