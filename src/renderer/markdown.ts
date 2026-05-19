@@ -38,7 +38,7 @@ function canonicalKey(s: string): string {
 }
 
 function mdText(s: string): string {
-  return s.replace(/\\/g, '\\\\').replace(/\|/g, '\\|').replace(/\r?\n/g, '<br>');
+  return s.replace(/\\/g, '\\\\').replace(/\|/g, '\\|').replace(/\r?\n/g, ' ');
 }
 
 function mdCode(s: string): string {
@@ -119,7 +119,7 @@ function collectTestRows(files: IParsedTestFile[]): TestRow[] {
 
 function summarizeCodeList(items: string[], emptyLabel: string): string {
   if (!items.length) return emptyLabel;
-  return items.map((s) => `Código: \`${mdCode(s)}\``).join('<br>');
+  return items.map((s, index) => `Código ${index + 1}: \`${mdCode(s)}\``).join('; ');
 }
 
 function testStatus(
@@ -319,7 +319,7 @@ function renderSuite(ctx: ITestContext, depth: number, junitIndex: JunitIndex): 
         c.metadata.priority ? `Prioridade: ${mdText(c.metadata.priority)}` : '',
         c.metadata.author ? `Autor: ${mdText(c.metadata.author)}` : ''
       ].filter(Boolean);
-      const scenario = details.length ? `${mdText(c.title)}<br>${details.join('<br>')}` : mdText(c.title);
+      const scenario = details.length ? `${mdText(c.title)} — ${details.join(' — ')}` : mdText(c.title);
       m += `| ${scenario} | ${summarizeCodeList(c.steps, 'Nenhuma ação inicial')} | ${summarizeCodeList(
         c.expectations,
         'Nenhuma validação automática identificada'
