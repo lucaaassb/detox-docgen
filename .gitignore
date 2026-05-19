@@ -4,3 +4,4 @@ dist/
 .DS_Store
 coverage/
 tests/fixtures/spec-docs.md
+tests/fixtures/spec-docs.pdf

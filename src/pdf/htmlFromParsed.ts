@@ -99,21 +99,68 @@ function splitTableCells(line: string): string[] {
 
 export function markdownToHtmlDocument(markdown: string, title: string): string {
   const css = `
-  body { font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; line-height:1.5; margin:40px; color:#333; }
-  h1 { color:#2c3e50; border-bottom:3px solid #3498db; padding-bottom:10px; }
-  h2 { color:#34495e; border-left:4px solid #3498db; padding-left:12px; margin-top:28px; }
-  h3, h4, h5, h6 { color:#2c3e50; margin-top:20px; }
-  table { width:100%; border-collapse:collapse; margin:12px 0 18px; font-size:13px; }
-  th, td { border:1px solid #d7dee8; padding:7px 9px; text-align:left; vertical-align:top; }
-  th { background:#edf3f8; }
-  code { background:#f1f3f5; border-radius:4px; padding:1px 4px; font-family: Consolas, monospace; font-size: 12px; }
+  :root { color-scheme: light; }
+  body {
+    font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+    line-height:1.5;
+    margin:0;
+    color:#243042;
+    background:#f5f7fb;
+  }
+  body > * { margin-left:40px; margin-right:40px; }
+  h1 {
+    margin:0 0 26px;
+    padding:38px 40px 34px;
+    color:#fff;
+    background:linear-gradient(135deg, #123f6d 0%, #2563eb 52%, #13a39a 100%);
+    border-bottom:6px solid #f59e0b;
+    font-size:30px;
+    letter-spacing:0;
+  }
+  h1 + p, h1 + p + p, h1 + p + p + p, h1 + p + p + p + p, h1 + p + p + p + p + p, h1 + p + p + p + p + p + p, h1 + p + p + p + p + p + p + p {
+    background:#ffffff;
+    border-left:4px solid #2563eb;
+    margin-top:0;
+    margin-bottom:8px;
+    padding:8px 12px;
+    box-shadow:0 1px 2px rgba(18,63,109,.08);
+  }
+  h2 {
+    color:#123f6d;
+    border-left:6px solid #13a39a;
+    padding:8px 0 8px 14px;
+    margin-top:30px;
+    background:#e9f5ff;
+  }
+  h3, h4, h5, h6 { color:#1f4f7a; margin-top:20px; }
+  table {
+    width:100%;
+    border-collapse:separate;
+    border-spacing:0;
+    margin:12px 0 20px;
+    font-size:12.5px;
+    background:#fff;
+    border:1px solid #d7e2ef;
+    box-shadow:0 1px 3px rgba(18,63,109,.08);
+  }
+  th, td { border-bottom:1px solid #d7e2ef; padding:8px 10px; text-align:left; vertical-align:top; }
+  th { background:#123f6d; color:#fff; font-weight:700; }
+  tr:nth-child(even) td { background:#f8fbff; }
+  tr:last-child td { border-bottom:0; }
+  code { background:#eef6ff; border:1px solid #cfe3f9; border-radius:4px; padding:1px 4px; font-family: Consolas, monospace; font-size: 12px; color:#143f63; }
   li { margin:4px 0; }
-  hr { border:0; border-top:1px solid #d7dee8; margin:24px 0; }
-  @media print { h1, h2, h3 { page-break-after: avoid; } table, ul { page-break-inside: avoid; } }`;
+  p { margin-top:8px; margin-bottom:8px; }
+  hr { border:0; border-top:2px solid #f59e0b; margin:26px 40px; }
+  @media print {
+    body { background:#fff; }
+    h1, h2, h3 { page-break-after: avoid; }
+    table, ul { page-break-inside: avoid; }
+  }`;
 
   const out: string[] = [];
   let inUl = false;
   let inTable = false;
+  let nextTableRowIsHeader = false;
   const closeBlocks = () => {
     if (inUl) {
       out.push('</ul>');
@@ -122,6 +169,7 @@ export function markdownToHtmlDocument(markdown: string, title: string): string 
     if (inTable) {
       out.push('</tbody></table>');
       inTable = false;
+      nextTableRowIsHeader = false;
     }
   };
 
@@ -155,9 +203,12 @@ export function markdownToHtmlDocument(markdown: string, title: string): string 
         }
         out.push('<table><tbody>');
         inTable = true;
+        nextTableRowIsHeader = true;
       }
       const cells = splitTableCells(line);
-      out.push('<tr>' + cells.map((c) => `<td>${escInlineMarkdown(c)}</td>`).join('') + '</tr>');
+      const tag = nextTableRowIsHeader ? 'th' : 'td';
+      out.push('<tr>' + cells.map((c) => `<${tag}>${escInlineMarkdown(c)}</${tag}>`).join('') + '</tr>');
+      nextTableRowIsHeader = false;
       continue;
     }
     if (line.startsWith('- ')) {
