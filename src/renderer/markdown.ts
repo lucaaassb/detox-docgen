@@ -161,20 +161,122 @@ function collectSelectors(rows: TestRow[]): SelectorRow[] {
   return out;
 }
 
+function featureName(row: TestRow): string {
+  const leafSuite = row.suiteName.split(' > ').pop() || row.suiteName;
+  if (/sess[aã]o|notifica/i.test(leafSuite)) return leafSuite;
+  return row.metadata.screen || leafSuite;
+}
+
+function uniqueSorted(values: string[]): string[] {
+  return Array.from(new Set(values.filter(Boolean))).sort((a, b) => a.localeCompare(b));
+}
+
+function naturalScenarioTitle(title: string): string {
+  const text = title.trim();
+  if (!text) return 'Cenário sem título identificado.';
+  return text.endsWith('.') ? text : `${text}.`;
+}
+
+function scenarioIntent(row: TestRow): string {
+  if (row.metadata.description) return row.metadata.description;
+  return naturalScenarioTitle(row.title);
+}
+
+function friendlySelector(selector: string, type: string): string {
+  if (type === 'by.text') return `texto "${selector}"`;
+  const spaced = selector
+    .replace(/([a-z])([A-Z])/g, '$1 $2')
+    .replace(/[-_]+/g, ' ')
+    .toLowerCase();
+  return `elemento "${spaced}"`;
+}
+
+function firstSelectorInCode(code: string): SelectorRow | undefined {
+  return extractSelectorsFromCode(code, '').at(0);
+}
+
+function actionToNaturalLanguage(code: string): string {
+  const selector = firstSelectorInCode(code);
+  const target = selector ? friendlySelector(selector.selector, selector.type) : 'elemento da interface';
+  const typed = /\.typeText\(\s*(['"`])([^'"`]+)\1\s*\)/.exec(code);
+  if (typed) return `Preencher ${target} com "${typed[2]}".`;
+  if (/\.tap\(\)/.test(code)) return `Tocar em ${target}.`;
+  const swipe = /\.swipe\(\s*(['"`])([^'"`]+)\1/.exec(code);
+  if (swipe) return `Realizar gesto de deslizar para ${swipe[2]} em ${target}.`;
+  if (/\bdevice\.launchApp\(\s*\{[^)]*newInstance:\s*true/.test(code)) {
+    return 'Iniciar uma nova instância do aplicativo.';
+  }
+  if (/\bdevice\.launchApp\(/.test(code)) return 'Iniciar o aplicativo.';
+  if (/\bdevice\.reloadReactNative\(/.test(code)) return 'Recarregar o React Native.';
+  if (/\bdevice\.relaunchApp\(/.test(code)) return 'Reiniciar o aplicativo.';
+  return `Executar comando de automação relacionado a ${target}.`;
+}
+
+function expectationToNaturalLanguage(code: string): string {
+  const selector = firstSelectorInCode(code);
+  const target = selector ? friendlySelector(selector.selector, selector.type) : 'resultado esperado';
+  const timeout = /\.withTimeout\(\s*(\d+)\s*\)/.exec(code);
+  const suffix = timeout ? ` em até ${Number(timeout[1]) / 1000}s` : '';
+  if (/\.toBeNotVisible\(\)/.test(code)) return `${target} não deve estar visível${suffix}.`;
+  if (/\.toBeVisible\(\)/.test(code)) return `${target} deve estar visível${suffix}.`;
+  if (/\.toExist\(\)/.test(code)) return `${target} deve existir na tela${suffix}.`;
+  const text = /\.toHaveText\(\s*(['"`])([^'"`]+)\1\s*\)/.exec(code);
+  if (text) return `${target} deve apresentar o texto "${text[2]}".`;
+  return `Validar ${target}.`;
+}
+
+function hookInterpretation(code: string): string {
+  if (/device\.launchApp\(\s*\{[^)]*newInstance:\s*true/.test(code)) {
+    return 'Inicia uma nova instância do aplicativo antes da execução da suíte.';
+  }
+  if (/device\.launchApp\(/.test(code)) {
+    return 'Inicia o aplicativo antes da execução dos testes.';
+  }
+  if (/device\.reloadReactNative\(/.test(code)) {
+    return 'Recarrega o React Native para reduzir interferências entre cenários.';
+  }
+  if (/device\.relaunchApp\(/.test(code)) {
+    return 'Reinicia o aplicativo para preparar um novo estado de teste.';
+  }
+  return 'Prepara o ambiente de teste antes da execução dos cenários.';
+}
+
+function featureGroups(rows: TestRow[]): Map<string, TestRow[]> {
+  const groups = new Map<string, TestRow[]>();
+  for (const row of rows) {
+    const key = featureName(row);
+    groups.set(key, [...(groups.get(key) ?? []), row]);
+  }
+  return groups;
+}
+
+function validatedTopics(rows: TestRow[]): string {
+  const words = rows
+    .map((row) => scenarioIntent(row).replace(/\.$/, '').toLowerCase())
+    .slice(0, 4);
+  if (!words.length) return 'Cenários automatizados identificados no código de teste';
+  return words.join('; ');
+}
+
+function codeBlock(lines: string[]): string {
+  if (!lines.length) return '_Nenhum código extraído._\n\n';
+  return `\`\`\`ts\n${lines.join('\n')}\n\`\`\`\n\n`;
+}
+
 function buildCover(
   files: IParsedTestFile[],
   stats: { totalTestFiles: number; totalTests: number },
   metadata: ReportMetadata
 ): string {
-  let m = '# Documentação de Testes Automatizados E2E com Detox\n\n';
+  let m = '# Relatório de Documentação de Testes Automatizados E2E\n\n';
   m += `**Projeto:** ${mdText(metadata.projectName)}\n\n`;
   m += '**Framework:** Detox\n\n';
   m += '**Tipo de teste:** End-to-End Mobile\n\n';
-  m += `**Total de arquivos analisados:** ${stats.totalTestFiles}\n\n`;
-  m += `**Total de cenários mapeados:** ${stats.totalTests}\n\n`;
-  m += `**Data de geração:** ${generationDateString()}\n\n`;
   const languages = Array.from(new Set(files.map((f) => sourceKindLabel(f.sourceKind)).filter((x) => x !== '-')));
   if (languages.length) m += `**Linguagem:** ${mdText(languages.join(', '))}\n\n`;
+  m += `**Data de geração:** ${generationDateString()}\n\n`;
+  m += `**Total de arquivos analisados:** ${stats.totalTestFiles}\n\n`;
+  m += `**Total de cenários mapeados:** ${stats.totalTests}\n\n`;
   m += '---\n\n';
   return m;
 }
@@ -263,6 +365,106 @@ function buildAutomatedAnalysis(): string {
   return m;
 }
 
+function buildManagementDivider(): string {
+  return '# PARTE 1 — VISÃO GERENCIAL DOS TESTES\n\nConteúdo voltado para leitura funcional e não técnica.\n\n---\n\n';
+}
+
+function buildTechnicalDivider(): string {
+  return '# PARTE 2 — DETALHAMENTO TÉCNICO DOS TESTES\n\nConteúdo voltado para QA, desenvolvimento e análise do código de automação.\n\n---\n\n';
+}
+
+function buildExecutiveSummary(rows: TestRow[]): string {
+  const features = uniqueSorted(rows.map(featureName));
+  const examples = features.length
+    ? features.slice(0, 5).join(', ')
+    : 'as funcionalidades identificadas nos testes';
+  let m = '## Resumo executivo\n\n';
+  m += `Este relatório apresenta a documentação automatizada dos testes End-to-End da aplicação mobile, utilizando o framework Detox. Os testes simulam ações reais de um usuário e cobrem funcionalidades como ${mdText(examples)}. `;
+  m += 'O objetivo é facilitar a compreensão da cobertura dos testes, tanto por pessoas técnicas quanto por pessoas não técnicas.\n\n';
+  return m;
+}
+
+function buildManagementIndicators(
+  files: IParsedTestFile[],
+  rows: TestRow[],
+  stats: { totalTestFiles: number; totalTests: number }
+): string {
+  const features = uniqueSorted(rows.map(featureName));
+  const suites = files.reduce((acc, f) => acc + countSuites(f.contexts), 0);
+  const hooks = files.reduce((acc, f) => acc + countHooks(f.contexts), 0);
+  const languages = Array.from(new Set(files.map((f) => sourceKindLabel(f.sourceKind)).filter((x) => x !== '-')));
+  let m = '## Indicadores gerais\n\n';
+  m += '| Indicador | Valor |\n';
+  m += '| --- | ---: |\n';
+  m += `| Arquivos de teste analisados | ${stats.totalTestFiles} |\n`;
+  m += `| Cenários automatizados | ${stats.totalTests} |\n`;
+  m += `| Funcionalidades cobertas | ${features.length} |\n`;
+  m += `| Suítes encontradas | ${suites} |\n`;
+  m += `| Hooks de preparação identificados | ${hooks} |\n`;
+  m += '| Framework utilizado | Detox |\n';
+  m += `| Linguagem | ${mdText(languages.join(', ') || '-')} |\n\n`;
+  return m;
+}
+
+function buildManagementCoverage(rows: TestRow[]): string {
+  const groups = featureGroups(rows);
+  let m = '## Cobertura por funcionalidade\n\n';
+  m += '| Funcionalidade | O que está sendo validado | Quantidade de cenários |\n';
+  m += '| --- | --- | ---: |\n';
+  for (const [feature, featureRows] of groups) {
+    m += `| ${mdText(feature)} | ${mdText(validatedTopics(featureRows))} | ${featureRows.length} |\n`;
+  }
+  m += '\n';
+  return m;
+}
+
+function buildNaturalScenarios(rows: TestRow[]): string {
+  const groups = featureGroups(rows);
+  let m = '## Cenários validados em linguagem natural\n\n';
+  for (const [feature, featureRows] of groups) {
+    m += `### Funcionalidade: ${mdText(feature)}\n\n`;
+    m += 'Cenários validados:\n\n';
+    for (const row of featureRows) {
+      m += `- ${mdText(naturalScenarioTitle(row.title))}\n`;
+    }
+    m += '\n';
+  }
+  return m;
+}
+
+function buildManagementConclusion(rows: TestRow[]): string {
+  const features = uniqueSorted(rows.map(featureName));
+  const topics = uniqueSorted(rows.map((row) => scenarioIntent(row).replace(/\.$/, ''))).slice(0, 6);
+  let m = '## Resultado geral da análise\n\n';
+  const scenarioLabel = rows.length === 1 ? 'cenário automatizado' : 'cenários automatizados';
+  m += `A análise identificou ${rows.length} ${scenarioLabel} distribuído${rows.length === 1 ? '' : 's'} entre as funcionalidades ${mdText(features.join(', ') || 'mapeadas')}. `;
+  m += `Os testes mapeados cobrem fluxos essenciais da aplicação${topics.length ? `, como ${mdText(topics.join('; '))}` : ''}.\n\n`;
+  return m;
+}
+
+function buildManagementNotes(): string {
+  let m = '## Observações\n\n';
+  m += '- Todos os cenários foram mapeados, mas isso não significa que foram executados com sucesso.\n';
+  m += '- O status "Mapeado" indica que o cenário foi identificado no código de teste.\n';
+  m += '- O relatório documenta a estrutura dos testes automatizados, facilitando entendimento, auditoria e manutenção.\n\n';
+  return m;
+}
+
+function buildManagementReport(
+  files: IParsedTestFile[],
+  rows: TestRow[],
+  stats: { totalTestFiles: number; totalTests: number }
+): string {
+  let m = buildManagementDivider();
+  m += buildExecutiveSummary(rows);
+  m += buildManagementIndicators(files, rows, stats);
+  m += buildManagementCoverage(rows);
+  m += buildNaturalScenarios(rows);
+  m += buildManagementConclusion(rows);
+  m += buildManagementNotes();
+  return m;
+}
+
 function buildJunitIndex(rows: IFlattenedJunit[]): JunitIndex {
   const index: JunitIndex = new Map();
   for (const row of rows) {
@@ -295,44 +497,100 @@ function headingLevel(depth: number, base: number = 3): string {
   return '#'.repeat(d);
 }
 
+function countTestsInContext(ctx: ITestContext): number {
+  return (ctx.testCases?.length ?? ctx.tests.length) + (ctx.nested ?? []).reduce((acc, n) => acc + countTestsInContext(n), 0);
+}
+
+function buildAnalyzedFilesTable(files: IParsedTestFile[]): string {
+  let m = '## Arquivos analisados\n\n';
+  m += '| Arquivo | Caminho | Linguagem | Suíte principal | Quantidade de cenários |\n';
+  m += '| --- | --- | --- | --- | ---: |\n';
+  for (const file of files) {
+    const total = file.contexts.reduce((acc, ctx) => acc + countTestsInContext(ctx), 0);
+    m += `| \`${mdCode(file.fileName)}\` | \`${mdCode(file.filePath)}\` | ${sourceKindLabel(file.sourceKind)} | ${mdText(file.firstContext || file.describe || '-')} | ${total} |\n`;
+  }
+  m += '\n';
+  return m;
+}
+
+function buildHookSectionForSuite(ctx: ITestContext, depth: number): string {
+  let m = '';
+  if (ctx.hooks?.length) {
+    m += `${headingLevel(depth, 3)} Hooks: ${mdText(ctx.name)}\n\n`;
+    for (const hook of ctx.hooks) {
+      m += `**Hook:** ${hook.type}\n\n`;
+      m += '**Código:**\n\n';
+      m += codeBlock(hook.summary ? [hook.summary] : []);
+      m += `**Interpretação:** ${mdText(hookInterpretation(hook.summary))}\n\n`;
+    }
+  }
+  for (const nested of ctx.nested ?? []) {
+    m += buildHookSectionForSuite(nested, depth + 1);
+  }
+  return m;
+}
+
+function buildHooksSection(files: IParsedTestFile[]): string {
+  let m = '## Hooks de configuração\n\n';
+  const body = files
+    .map((file) => {
+      const content = file.contexts.map((ctx) => buildHookSectionForSuite(ctx, 0)).join('');
+      return content ? `### Arquivo: ${mdText(file.fileName)}\n\n${content}` : '';
+    })
+    .filter(Boolean)
+    .join('');
+  return body ? m + body : m + 'Nenhum hook de configuração foi identificado.\n\n';
+}
+
+function renderScenarioCard(c: ITestCaseDetail, ctx: ITestContext, junitIndex: JunitIndex): string {
+  const execution = findJunitMatch(junitIndex, ctx.name, c.title);
+  const status = execution
+    ? `${stateLabel(execution.state)} (${formatDurationSeconds(execution.timeSec)})`
+    : 'Mapeado';
+  const steps = c.steps.map(actionToNaturalLanguage);
+  const expectations = c.expectations.map(expectationToNaturalLanguage);
+  let m = `#### Cenário: ${mdText(c.title)}\n\n`;
+  m += `**Descrição funcional:** ${mdText(c.metadata.description || naturalScenarioTitle(c.title))}\n\n`;
+  m += `**Tela:** ${mdText(c.metadata.screen || featureName({
+    fileName: '',
+    suiteName: ctx.name,
+    title: c.title,
+    steps: c.steps,
+    expectations: c.expectations,
+    metadata: c.metadata
+  }))}\n\n`;
+  if (c.metadata.priority) m += `**Prioridade:** ${mdText(c.metadata.priority)}\n\n`;
+  m += `**Status:** ${status}\n\n`;
+  m += '**Ações executadas:**\n\n';
+  if (steps.length) {
+    for (const [index, step] of steps.entries()) m += `${index + 1}. ${mdText(step)}\n`;
+  } else {
+    m += 'Nenhuma ação inicial foi identificada no corpo do cenário.\n';
+  }
+  m += '\n**Validação esperada:**\n\n';
+  if (expectations.length) {
+    for (const [index, expectation] of expectations.entries()) m += `${index + 1}. ${mdText(expectation)}\n`;
+  } else {
+    m += 'Nenhuma validação automática foi identificada no corpo do cenário.\n';
+  }
+  m += '\n**Código extraído:**\n\n';
+  m += codeBlock([...c.steps, ...c.expectations]);
+  return m;
+}
+
 function renderSuite(ctx: ITestContext, depth: number, junitIndex: JunitIndex): string {
   let m = '';
   m += `${headingLevel(depth, 2)} **${mdText(ctx.name)}**\n\n`;
-  if (ctx.hooks && ctx.hooks.length) {
-    m += '**Hooks de configuração do bloco**:\n\n';
-    for (const h of ctx.hooks) {
-      m += `- *${h.type}*${h.summary ? `: Código: \`${mdCode(h.summary)}\`` : ''}\n`;
-    }
-    m += '\n';
-  }
   if (ctx.testCases && ctx.testCases.length) {
-    m += '| Cenário | Ações executadas | Validação esperada | Status |\n';
-    m += '| --- | --- | --- | --- |\n';
     for (const c of ctx.testCases) {
-      const execution = findJunitMatch(junitIndex, ctx.name, c.title);
-      const status = execution
-        ? `${stateLabel(execution.state)} (${formatDurationSeconds(execution.timeSec)})`
-        : 'Mapeado';
-      const details = [
-        c.metadata.description ? mdText(c.metadata.description) : '',
-        c.metadata.screen ? `Tela: ${mdText(c.metadata.screen)}` : '',
-        c.metadata.priority ? `Prioridade: ${mdText(c.metadata.priority)}` : '',
-        c.metadata.author ? `Autor: ${mdText(c.metadata.author)}` : ''
-      ].filter(Boolean);
-      const scenario = details.length ? `${mdText(c.title)} — ${details.join(' — ')}` : mdText(c.title);
-      m += `| ${scenario} | ${summarizeCodeList(c.steps, 'Nenhuma ação inicial')} | ${summarizeCodeList(
-        c.expectations,
-        'Nenhuma validação automática identificada'
-      )} | ${status} |\n`;
+      m += renderScenarioCard(c, ctx, junitIndex);
     }
-    m += '\n';
   } else if (ctx.tests.length) {
-    m += '| Cenário | Ações executadas | Validação esperada | Status |\n';
-    m += '| --- | --- | --- | --- |\n';
     for (const t of ctx.tests) {
-      m += `| ${mdText(t)} | Nenhuma ação inicial | Nenhuma validação automática identificada | Mapeado |\n`;
+      m += `#### Cenário: ${mdText(t)}\n\n`;
+      m += '**Descrição funcional:** Cenário identificado no teste automatizado.\n\n';
+      m += '**Status:** Mapeado\n\n';
     }
-    m += '\n';
   }
   for (const n of ctx.nested ?? []) {
     m += renderSuite(n, depth + 1, junitIndex);
@@ -355,6 +613,53 @@ function renderFileSection(p: IParsedTestFile, junitIndex: JunitIndex): string {
   }
   for (const c of p.contexts) {
     m += renderSuite(c, 0, junitIndex);
+  }
+  return m;
+}
+
+function buildTechnicalSummary(
+  files: IParsedTestFile[],
+  allRows: IFlattenedJunit[],
+  stats: { spec: number; e2e: number; test: number; totalTestFiles: number; totalTests: number }
+): string {
+  const languages = Array.from(new Set(files.map((f) => sourceKindLabel(f.sourceKind)).filter((x) => x !== '-')));
+  let m = '## Resumo técnico\n\n';
+  m += `- Arquivos de teste: **${stats.totalTestFiles}**\n`;
+  m += `- Testes (it / test) enumerados: **${stats.totalTests}**\n`;
+  m += '- Framework: **Detox**\n';
+  m += `- Linguagem: **${mdText(languages.join(', ') || '-')}**\n`;
+  if (allRows.length) {
+    const a = aggregateJunit(allRows);
+    m += `- Testes no JUnit: **${a.total}** (${a.passed} OK, ${a.failed} falha(s), ${a.skipped} ignorado(s))\n`;
+    const documented = new Set(files.flatMap((f) => f.its.map(canonicalKey)));
+    const unmatchedJunit = allRows.filter((r) => !documented.has(canonicalKey(r.name))).length;
+    if (unmatchedJunit) m += `- Linhas JUnit sem teste documentado correspondente: **${unmatchedJunit}**\n`;
+  }
+  if (stats.e2e) m += `- Padrão \`*.e2e.*\`: **${stats.e2e}** arquivo(s)\n`;
+  if (stats.spec) m += `- Padrão \`*.spec.*\`: **${stats.spec}** arquivo(s)\n`;
+  if (stats.test) m += `- Padrão \`*.test.*\`: **${stats.test}** arquivo(s)\n`;
+  m += '\n';
+  return m;
+}
+
+function buildTechnicalReport(
+  files: IParsedTestFile[],
+  allRows: IFlattenedJunit[],
+  stats: { spec: number; e2e: number; test: number; totalTestFiles: number; totalTests: number },
+  testRows: TestRow[],
+  junitIndex: JunitIndex,
+  metadata: ReportMetadata
+): string {
+  let m = buildTechnicalDivider();
+  m += buildTechnicalSummary(files, allRows, stats);
+  m += buildAnalyzedFilesTable(files);
+  m += buildHooksSection(files);
+  m += buildSelectorsTable(testRows);
+  m += buildAutomatedAnalysis();
+  if (allRows.length) m += buildExecutionReportJunit(allRows, metadata);
+  m += '## Detalhamento técnico dos cenários\n\n';
+  for (const f of files) {
+    m += renderFileSection(f, junitIndex);
   }
   return m;
 }
@@ -455,32 +760,9 @@ export function buildTestDocumentation(
       ? { projectName: projectNameOrMetadata }
       : projectNameOrMetadata;
   const junitIndex = buildJunitIndex(allRows);
-  const hasJunit = allRows.length > 0;
   const testRows = collectTestRows(files);
   let m = buildCover(files, stats, metadata);
-  m += buildSummaryCards(files, stats);
-  m += buildStatusTable(testRows, junitIndex);
-  m += buildSelectorsTable(testRows);
-  m += buildCoverageTable(testRows);
-  m += buildAutomatedAnalysis();
-  if (hasJunit) m += buildExecutionReportJunit(allRows, metadata);
-  m += '## Resumo técnico\n\n';
-  m += `- Arquivos de teste: **${stats.totalTestFiles}**\n`;
-  m += `- Testes (it / test) enumerados: **${stats.totalTests}**\n`;
-  if (allRows.length) {
-    const a = aggregateJunit(allRows);
-    m += `- Testes no JUnit: **${a.total}** (${a.passed} OK, ${a.failed} falha(s), ${a.skipped} ignorado(s))\n`;
-    const documented = new Set(files.flatMap((f) => f.its.map(canonicalKey)));
-    const unmatchedJunit = allRows.filter((r) => !documented.has(canonicalKey(r.name))).length;
-    if (unmatchedJunit) m += `- Linhas JUnit sem teste documentado correspondente: **${unmatchedJunit}**\n`;
-  }
-  if (stats.e2e) m += `- Padrão \`*.e2e.*\`: **${stats.e2e}** arquivo(s)\n`;
-  if (stats.spec) m += `- Padrão \`*.spec.*\`: **${stats.spec}** arquivo(s)\n`;
-  if (stats.test) m += `- Padrão \`*.test.*\`: **${stats.test}** arquivo(s)\n`;
-  m += '\n';
-  m += '---\n\n';
-  for (const f of files) {
-    m += renderFileSection(f, junitIndex);
-  }
+  m += buildManagementReport(files, testRows, stats);
+  m += buildTechnicalReport(files, allRows, stats, testRows, junitIndex, metadata);
   return m;
 }

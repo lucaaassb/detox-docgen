@@ -164,6 +164,19 @@ export function markdownToHtmlDocument(markdown: string, title: string): string 
     line-height:1.35;
     color:#143f63;
   }
+  pre {
+    margin:8px 0 18px;
+    padding:0;
+    white-space:pre-wrap;
+    page-break-inside:avoid;
+  }
+  pre code {
+    display:block;
+    width:100%;
+    padding:10px 12px;
+    border-left:5px solid #2563eb;
+    white-space:pre-wrap;
+  }
   li { margin:4px 0; }
   p { margin-top:8px; margin-bottom:8px; }
   hr { border:0; border-top:2px solid #f59e0b; margin:26px 0; }
@@ -175,12 +188,20 @@ export function markdownToHtmlDocument(markdown: string, title: string): string 
 
   const out: string[] = [];
   let inUl = false;
+  let inOl = false;
   let inTable = false;
+  let inCodeBlock = false;
+  let codeBlockLanguage = '';
+  let codeBlockLines: string[] = [];
   let nextTableRowIsHeader = false;
   const closeBlocks = () => {
     if (inUl) {
       out.push('</ul>');
       inUl = false;
+    }
+    if (inOl) {
+      out.push('</ol>');
+      inOl = false;
     }
     if (inTable) {
       out.push('</tbody></table>');
@@ -188,13 +209,43 @@ export function markdownToHtmlDocument(markdown: string, title: string): string 
       nextTableRowIsHeader = false;
     }
   };
+  const closeCodeBlock = () => {
+    out.push(
+      `<pre><code${codeBlockLanguage ? ` class="language-${esc(codeBlockLanguage)}"` : ''}>${esc(
+        codeBlockLines.join('\n')
+      )}</code></pre>`
+    );
+    inCodeBlock = false;
+    codeBlockLanguage = '';
+    codeBlockLines = [];
+  };
 
   for (const rawLine of markdown.split(/\r?\n/)) {
     const line = rawLine.trimEnd();
+    const codeFence = /^```(\w+)?\s*$/.exec(line.trim());
+    if (codeFence) {
+      if (inCodeBlock) {
+        closeCodeBlock();
+      } else {
+        closeBlocks();
+        inCodeBlock = true;
+        codeBlockLanguage = codeFence[1] ?? '';
+        codeBlockLines = [];
+      }
+      continue;
+    }
+    if (inCodeBlock) {
+      codeBlockLines.push(line);
+      continue;
+    }
     if (!line.trim()) {
       if (inUl) {
         out.push('</ul>');
         inUl = false;
+      }
+      if (inOl) {
+        out.push('</ol>');
+        inOl = false;
       }
       continue;
     }
@@ -217,6 +268,10 @@ export function markdownToHtmlDocument(markdown: string, title: string): string 
           out.push('</ul>');
           inUl = false;
         }
+        if (inOl) {
+          out.push('</ol>');
+          inOl = false;
+        }
         out.push('<table><tbody>');
         inTable = true;
         nextTableRowIsHeader = true;
@@ -227,10 +282,31 @@ export function markdownToHtmlDocument(markdown: string, title: string): string 
       nextTableRowIsHeader = false;
       continue;
     }
+    const ordered = /^(\d+)\.\s+(.*)$/.exec(line);
+    if (ordered) {
+      if (inTable) {
+        out.push('</tbody></table>');
+        inTable = false;
+      }
+      if (inUl) {
+        out.push('</ul>');
+        inUl = false;
+      }
+      if (!inOl) {
+        out.push('<ol>');
+        inOl = true;
+      }
+      out.push(`<li>${escInlineMarkdown(ordered[2])}</li>`);
+      continue;
+    }
     if (line.startsWith('- ')) {
       if (inTable) {
         out.push('</tbody></table>');
         inTable = false;
+      }
+      if (inOl) {
+        out.push('</ol>');
+        inOl = false;
       }
       if (!inUl) {
         out.push('<ul>');
@@ -242,6 +318,7 @@ export function markdownToHtmlDocument(markdown: string, title: string): string 
     closeBlocks();
     out.push(`<p>${escInlineMarkdown(line)}</p>`);
   }
+  if (inCodeBlock) closeCodeBlock();
   closeBlocks();
 
   return '<!doctype html><html><head><meta charset="utf-8"><title>' +

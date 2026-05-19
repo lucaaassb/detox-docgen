@@ -74,7 +74,7 @@ export async function generateSinglePDF(workingDir: string = process.cwd()): Pro
       args: ['--no-sandbox', '--disable-setuid-sandbox']
     });
     const page = await browser.newPage();
-    await page.setContent(html, { waitUntil: 'networkidle0' });
+    await page.setContent(html, { waitUntil: 'load', timeout: 0 });
     const out = path.join(workingDir, 'spec-docs.pdf');
     await page.pdf({
       path: out,
@@ -128,7 +128,7 @@ export async function generateFolderPDFs(workingDir: string = process.cwd()): Pr
         args: ['--no-sandbox', '--disable-setuid-sandbox']
       });
       const page = await browser.newPage();
-      await page.setContent(html, { waitUntil: 'networkidle0' });
+      await page.setContent(html, { waitUntil: 'load', timeout: 0 });
       const name = getPdfFileNameForDir(workingDir, d);
       const out = path.join(outRoot, name);
       await page.pdf({

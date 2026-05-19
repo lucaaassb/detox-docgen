@@ -51,9 +51,13 @@ describe('markdown renderer', () => {
     expect(md).toContain('| **Sistema**     | mobile-app |');
     expect(md).toContain('| **Versão**      | 1.2.3 |');
     expect(md).toContain('- Testes no JUnit: **1** (1 OK, 0 falha(s), 0 ignorado(s))');
-    expect(md).toContain('| deve abrir a tela — Tela: Login — Prioridade: alta | Código 1: `await element(by.id(\'email\')).typeText(\'a@b.com\')` | Código 1: `await expect(element(by.id(\'homeScreen\'))).toBeVisible()` | OK (2s) |');
+    expect(md).toContain('#### Cenário: deve abrir a tela');
+    expect(md).toContain('**Status:** OK (2s)');
+    expect(md).toContain('1. Preencher elemento "email" com "a@b.com".');
+    expect(md).toContain('```ts\nawait element(by.id(\'email\')).typeText(\'a@b.com\')\nawait expect(element(by.id(\'homeScreen\'))).toBeVisible()\n```');
     expect(md).toContain('| `email` | `by.id` | `login.e2e.ts` |');
-    expect(md).toContain('| Login | `login.e2e.ts` | 1 |');
+    expect(md).toContain('| Login | deve abrir a tela | 1 |');
+    expect(md).toContain('| `login.e2e.ts` | `e2e/login.e2e.ts` | TypeScript | Login | 1 |');
     expect(md).not.toContain('### Describe:');
     expect(md).not.toContain('## Sumário');
   });
