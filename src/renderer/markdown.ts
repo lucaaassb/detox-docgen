@@ -17,6 +17,7 @@ type TestRow = {
   title: string;
   steps: string[];
   expectations: string[];
+  codeSnippets: string[];
   metadata: ITestCaseDetail['metadata'];
 };
 
@@ -66,6 +67,12 @@ function sourceKindLabel(kind: string | undefined): string {
   return '-';
 }
 
+function sourceCodeLanguage(kind: string | undefined): string {
+  if (kind === 'javascript') return 'js';
+  if (kind === 'tsx') return 'tsx';
+  return 'ts';
+}
+
 function countSuites(ctxs: ITestContext[]): number {
   let total = 0;
   for (const ctx of ctxs) {
@@ -94,6 +101,7 @@ function collectTestRows(files: IParsedTestFile[]): TestRow[] {
         title: c.title,
         steps: c.steps,
         expectations: c.expectations,
+        codeSnippets: c.codeSnippets ?? [...c.steps, ...c.expectations],
         metadata: c.metadata
       });
     }
@@ -105,6 +113,7 @@ function collectTestRows(files: IParsedTestFile[]): TestRow[] {
           title,
           steps: [],
           expectations: [],
+          codeSnippets: [],
           metadata: {}
         });
       }
@@ -133,11 +142,12 @@ function testStatus(
 
 function extractSelectorsFromCode(code: string, fileName: string): SelectorRow[] {
   const rows: SelectorRow[] = [];
-  const re = /\bby\.(id|text|label|type|traits|value)\(\s*(['"`])([^'"`]+)\2\s*\)/g;
+  const re = /\bby\.(id|text|label|type|traits|value)\(\s*(?:(['"`])([^'"`]+)\2|\/((?:\\.|[^/])+?)\/[gimsuy]*)\s*\)/g;
   let match: RegExpExecArray | null;
   while ((match = re.exec(code)) !== null) {
+    const selector = match[3] ?? `/${match[4]}/`;
     rows.push({
-      selector: match[3],
+      selector,
       type: `by.${match[1]}`,
       fileName
     });
@@ -149,7 +159,10 @@ function collectSelectors(rows: TestRow[]): SelectorRow[] {
   const seen = new Set<string>();
   const out: SelectorRow[] = [];
   for (const row of rows) {
-    for (const code of [...row.steps, ...row.expectations]) {
+    const codeSources = row.codeSnippets.length
+      ? row.codeSnippets
+      : [...row.steps, ...row.expectations];
+    for (const code of codeSources) {
       for (const selector of extractSelectorsFromCode(code, row.fileName)) {
         const key = `${selector.type}\0${selector.selector}\0${selector.fileName}`;
         if (seen.has(key)) continue;
@@ -183,6 +196,7 @@ function scenarioIntent(row: TestRow): string {
 }
 
 function friendlySelector(selector: string, type: string): string {
+  if (selector.startsWith('/')) return `elemento que corresponde ao padrão ${selector}`;
   if (type === 'by.text') return `texto "${selector}"`;
   const spaced = selector
     .replace(/([a-z])([A-Z])/g, '$1 $2')
@@ -195,12 +209,51 @@ function firstSelectorInCode(code: string): SelectorRow | undefined {
   return extractSelectorsFromCode(code, '').at(0);
 }
 
-function actionToNaturalLanguage(code: string): string {
+function humanizeIdentifier(name: string): string {
+  return name
+    .replace(/([a-z])([A-Z])/g, '$1 $2')
+    .replace(/[-_]+/g, ' ')
+    .toLowerCase();
+}
+
+function variableTargetInCode(code: string): string | null {
+  const wait = /\bwaitFor\(\s*([A-Za-z_$][\w$]*)\s*\)/.exec(code);
+  if (wait) return `elemento "${humanizeIdentifier(wait[1])}"`;
+  const method = /\b([A-Za-z_$][\w$]*)\.(tap|multiTap|typeText|replaceText|clearText|scroll|scrollTo|swipe|getAttributes)\s*\(/.exec(code);
+  if (method) return `elemento "${humanizeIdentifier(method[1])}"`;
+  return null;
+}
+
+function targetFromCode(code: string, fallback: string): string {
   const selector = firstSelectorInCode(code);
-  const target = selector ? friendlySelector(selector.selector, selector.type) : 'elemento da interface';
+  return selector ? friendlySelector(selector.selector, selector.type) : variableTargetInCode(code) ?? fallback;
+}
+
+function helperCallFromCode(code: string): string | null {
+  const compact = code
+    .replace(/^const\s+[A-Za-z_$][\w$]*\s*=\s*/, '')
+    .replace(/;$/, '')
+    .trim();
+  const match = /^(?:await\s+)?([A-Za-z_$][\w$]*)\s*\(/.exec(compact);
+  if (!match) return null;
+  const name = match[1];
+  if (['element', 'expect', 'waitFor', 'by', 'describe', 'it', 'test'].includes(name)) return null;
+  return name;
+}
+
+function actionToNaturalLanguage(code: string): string {
+  const target = targetFromCode(code, 'elemento da interface');
   const typed = /\.typeText\(\s*(['"`])([^'"`]+)\1\s*\)/.exec(code);
   if (typed) return `Preencher ${target} com "${typed[2]}".`;
+  const replaceText = /\.replaceText\(\s*(['"`])([^'"`]+)\1\s*\)/.exec(code);
+  if (replaceText) return `Substituir o texto de ${target} por "${replaceText[2]}".`;
+  if (/\.clearText\(\)/.test(code)) return `Limpar o texto de ${target}.`;
   if (/\.tap\(\)/.test(code)) return `Tocar em ${target}.`;
+  if (/\.multiTap\(/.test(code)) return `Tocar repetidamente em ${target}.`;
+  const scroll = /\.scroll\(\s*(\d+)\s*,\s*(['"`])([^'"`]+)\2/.exec(code);
+  if (scroll) return `Rolar ${target} para ${scroll[3]}.`;
+  const scrollTo = /\.scrollTo\(\s*(['"`])([^'"`]+)\1/.exec(code);
+  if (scrollTo) return `Rolar ${target} até ${scrollTo[2]}.`;
   const swipe = /\.swipe\(\s*(['"`])([^'"`]+)\1/.exec(code);
   if (swipe) return `Realizar gesto de deslizar para ${swipe[2]} em ${target}.`;
   if (/\bdevice\.launchApp\(\s*\{[^)]*newInstance:\s*true/.test(code)) {
@@ -209,14 +262,20 @@ function actionToNaturalLanguage(code: string): string {
   if (/\bdevice\.launchApp\(/.test(code)) return 'Iniciar o aplicativo.';
   if (/\bdevice\.reloadReactNative\(/.test(code)) return 'Recarregar o React Native.';
   if (/\bdevice\.relaunchApp\(/.test(code)) return 'Reiniciar o aplicativo.';
+  if (/\bdevice\.openURL\(/.test(code)) return 'Abrir o aplicativo por URL/deep link.';
+  if (/\bdevice\.sendToHome\(/.test(code)) return 'Enviar o aplicativo para segundo plano.';
+  const orientation = /\bdevice\.setOrientation\(\s*(['"`])([^'"`]+)\1/.exec(code);
+  if (orientation) return `Alterar a orientação do dispositivo para ${orientation[2]}.`;
+  const helper = helperCallFromCode(code);
+  if (helper) return `Executar fluxo auxiliar "${humanizeIdentifier(helper)}".`;
   return `Executar comando de automação relacionado a ${target}.`;
 }
 
 function expectationToNaturalLanguage(code: string): string {
-  const selector = firstSelectorInCode(code);
-  const target = selector ? friendlySelector(selector.selector, selector.type) : 'resultado esperado';
+  const target = targetFromCode(code, 'resultado esperado');
   const timeout = /\.withTimeout\(\s*(\d+)\s*\)/.exec(code);
   const suffix = timeout ? ` em até ${Number(timeout[1]) / 1000}s` : '';
+  if (/\.not\.toBeVisible\(\)/.test(code)) return `${target} não deve estar visível${suffix}.`;
   if (/\.toBeNotVisible\(\)/.test(code)) return `${target} não deve estar visível${suffix}.`;
   if (/\.toBeVisible\(\)/.test(code)) return `${target} deve estar visível${suffix}.`;
   if (/\.toExist\(\)/.test(code)) return `${target} deve existir na tela${suffix}.`;
@@ -238,6 +297,10 @@ function hookInterpretation(code: string): string {
   if (/device\.relaunchApp\(/.test(code)) {
     return 'Reinicia o aplicativo para preparar um novo estado de teste.';
   }
+  const helper = helperCallFromCode(code);
+  if (helper) {
+    return `Delega a preparação para o fluxo auxiliar "${humanizeIdentifier(helper)}".`;
+  }
   return 'Prepara o ambiente de teste antes da execução dos cenários.';
 }
 
@@ -258,9 +321,11 @@ function validatedTopics(rows: TestRow[]): string {
   return words.join('; ');
 }
 
-function codeBlock(lines: string[]): string {
-  if (!lines.length) return '_Nenhum código extraído._\n\n';
-  return `\`\`\`ts\n${lines.join('\n')}\n\`\`\`\n\n`;
+function codeBlock(lines: string[], language: string = 'ts'): string {
+  if (!lines.length) {
+    return 'Sem trecho de automação inline para exibir; o cenário pode estar delegado a fluxos auxiliares ou ter apenas estrutura declarativa.\n\n';
+  }
+  return `\`\`\`${language}\n${lines.join('\n')}\n\`\`\`\n\n`;
 }
 
 function buildCover(
@@ -313,7 +378,7 @@ function buildStatusTable(rows: TestRow[], junitIndex: JunitIndex): string {
 
 function buildSelectorsTable(rows: TestRow[]): string {
   const selectors = collectSelectors(rows);
-  let m = '## Seletores usados\n\n';
+  let m = '## 10. Seletores usados\n\n';
   if (!selectors.length) {
     m += 'Nenhum seletor Detox foi identificado automaticamente nos passos mapeados.\n\n';
     return m;
@@ -353,7 +418,7 @@ function buildCoverageTable(rows: TestRow[]): string {
 }
 
 function buildAutomatedAnalysis(): string {
-  let m = '## Análise automatizada dos testes\n\n';
+  let m = '## 11. Como a análise foi montada\n\n';
   m += 'A ferramenta identificou automaticamente:\n\n';
   m += '- Arquivos de teste Detox\n';
   m += '- Suítes de teste\n';
@@ -366,11 +431,11 @@ function buildAutomatedAnalysis(): string {
 }
 
 function buildManagementDivider(): string {
-  return '# PARTE 1 — VISÃO GERENCIAL DOS TESTES\n\nConteúdo voltado para leitura funcional e não técnica.\n\n---\n\n';
+  return '# Parte 1 — Visão gerencial\n\nLeitura funcional do que foi encontrado, quais fluxos estão cobertos e quais cuidados considerar ao interpretar o relatório.\n\n---\n\n';
 }
 
 function buildTechnicalDivider(): string {
-  return '# PARTE 2 — DETALHAMENTO TÉCNICO DOS TESTES\n\nConteúdo voltado para QA, desenvolvimento e análise do código de automação.\n\n---\n\n';
+  return '# Parte 2 — Detalhamento técnico\n\nInventário técnico dos arquivos, hooks, seletores e trechos de automação extraídos dos testes.\n\n---\n\n';
 }
 
 function buildExecutiveSummary(rows: TestRow[]): string {
@@ -378,7 +443,7 @@ function buildExecutiveSummary(rows: TestRow[]): string {
   const examples = features.length
     ? features.slice(0, 5).join(', ')
     : 'as funcionalidades identificadas nos testes';
-  let m = '## Resumo executivo\n\n';
+  let m = '## 1. Resumo executivo\n\n';
   m += `Este relatório apresenta a documentação automatizada dos testes End-to-End da aplicação mobile, utilizando o framework Detox. Os testes simulam ações reais de um usuário e cobrem funcionalidades como ${mdText(examples)}. `;
   m += 'O objetivo é facilitar a compreensão da cobertura dos testes, tanto por pessoas técnicas quanto por pessoas não técnicas.\n\n';
   return m;
@@ -393,7 +458,7 @@ function buildManagementIndicators(
   const suites = files.reduce((acc, f) => acc + countSuites(f.contexts), 0);
   const hooks = files.reduce((acc, f) => acc + countHooks(f.contexts), 0);
   const languages = Array.from(new Set(files.map((f) => sourceKindLabel(f.sourceKind)).filter((x) => x !== '-')));
-  let m = '## Indicadores gerais\n\n';
+  let m = '## 2. Indicadores gerais\n\n';
   m += '| Indicador | Valor |\n';
   m += '| --- | ---: |\n';
   m += `| Arquivos de teste analisados | ${stats.totalTestFiles} |\n`;
@@ -408,7 +473,7 @@ function buildManagementIndicators(
 
 function buildManagementCoverage(rows: TestRow[]): string {
   const groups = featureGroups(rows);
-  let m = '## Cobertura por funcionalidade\n\n';
+  let m = '## 3. Cobertura por funcionalidade\n\n';
   m += '| Funcionalidade | O que está sendo validado | Quantidade de cenários |\n';
   m += '| --- | --- | ---: |\n';
   for (const [feature, featureRows] of groups) {
@@ -420,7 +485,7 @@ function buildManagementCoverage(rows: TestRow[]): string {
 
 function buildNaturalScenarios(rows: TestRow[]): string {
   const groups = featureGroups(rows);
-  let m = '## Cenários validados em linguagem natural\n\n';
+  let m = '## 4. Cenários validados em linguagem natural\n\n';
   for (const [feature, featureRows] of groups) {
     m += `### Funcionalidade: ${mdText(feature)}\n\n`;
     m += 'Cenários validados:\n\n';
@@ -435,7 +500,7 @@ function buildNaturalScenarios(rows: TestRow[]): string {
 function buildManagementConclusion(rows: TestRow[]): string {
   const features = uniqueSorted(rows.map(featureName));
   const topics = uniqueSorted(rows.map((row) => scenarioIntent(row).replace(/\.$/, ''))).slice(0, 6);
-  let m = '## Resultado geral da análise\n\n';
+  let m = '## 5. Resultado geral da análise\n\n';
   const scenarioLabel = rows.length === 1 ? 'cenário automatizado' : 'cenários automatizados';
   m += `A análise identificou ${rows.length} ${scenarioLabel} distribuído${rows.length === 1 ? '' : 's'} entre as funcionalidades ${mdText(features.join(', ') || 'mapeadas')}. `;
   m += `Os testes mapeados cobrem fluxos essenciais da aplicação${topics.length ? `, como ${mdText(topics.join('; '))}` : ''}.\n\n`;
@@ -443,7 +508,7 @@ function buildManagementConclusion(rows: TestRow[]): string {
 }
 
 function buildManagementNotes(): string {
-  let m = '## Observações\n\n';
+  let m = '## 6. Observações de leitura\n\n';
   m += '- Todos os cenários foram mapeados, mas isso não significa que foram executados com sucesso.\n';
   m += '- O status "Mapeado" indica que o cenário foi identificado no código de teste.\n';
   m += '- O relatório documenta a estrutura dos testes automatizados, facilitando entendimento, auditoria e manutenção.\n\n';
@@ -502,7 +567,7 @@ function countTestsInContext(ctx: ITestContext): number {
 }
 
 function buildAnalyzedFilesTable(files: IParsedTestFile[]): string {
-  let m = '## Arquivos analisados\n\n';
+  let m = '## 8. Arquivos analisados\n\n';
   m += '| Arquivo | Caminho | Linguagem | Suíte principal | Quantidade de cenários |\n';
   m += '| --- | --- | --- | --- | ---: |\n';
   for (const file of files) {
@@ -513,28 +578,29 @@ function buildAnalyzedFilesTable(files: IParsedTestFile[]): string {
   return m;
 }
 
-function buildHookSectionForSuite(ctx: ITestContext, depth: number): string {
+function buildHookSectionForSuite(ctx: ITestContext, depth: number, language: string): string {
   let m = '';
   if (ctx.hooks?.length) {
     m += `${headingLevel(depth, 3)} Hooks: ${mdText(ctx.name)}\n\n`;
     for (const hook of ctx.hooks) {
       m += `**Hook:** ${hook.type}\n\n`;
       m += '**Código:**\n\n';
-      m += codeBlock(hook.summary ? [hook.summary] : []);
+      m += codeBlock(hook.summary ? [hook.summary] : [], language);
       m += `**Interpretação:** ${mdText(hookInterpretation(hook.summary))}\n\n`;
     }
   }
   for (const nested of ctx.nested ?? []) {
-    m += buildHookSectionForSuite(nested, depth + 1);
+    m += buildHookSectionForSuite(nested, depth + 1, language);
   }
   return m;
 }
 
 function buildHooksSection(files: IParsedTestFile[]): string {
-  let m = '## Hooks de configuração\n\n';
+  let m = '## 9. Hooks de configuração\n\n';
   const body = files
     .map((file) => {
-      const content = file.contexts.map((ctx) => buildHookSectionForSuite(ctx, 0)).join('');
+      const language = sourceCodeLanguage(file.sourceKind);
+      const content = file.contexts.map((ctx) => buildHookSectionForSuite(ctx, 0, language)).join('');
       return content ? `### Arquivo: ${mdText(file.fileName)}\n\n${content}` : '';
     })
     .filter(Boolean)
@@ -542,48 +608,54 @@ function buildHooksSection(files: IParsedTestFile[]): string {
   return body ? m + body : m + 'Nenhum hook de configuração foi identificado.\n\n';
 }
 
-function renderScenarioCard(c: ITestCaseDetail, ctx: ITestContext, junitIndex: JunitIndex): string {
+function renderScenarioCard(c: ITestCaseDetail, ctx: ITestContext, junitIndex: JunitIndex, language: string): string {
   const execution = findJunitMatch(junitIndex, ctx.name, c.title);
   const status = execution
     ? `${stateLabel(execution.state)} (${formatDurationSeconds(execution.timeSec)})`
     : 'Mapeado';
   const steps = c.steps.map(actionToNaturalLanguage);
   const expectations = c.expectations.map(expectationToNaturalLanguage);
-  let m = `#### Cenário: ${mdText(c.title)}\n\n`;
-  m += `**Descrição funcional:** ${mdText(c.metadata.description || naturalScenarioTitle(c.title))}\n\n`;
-  m += `**Tela:** ${mdText(c.metadata.screen || featureName({
+  const fallbackFeature = featureName({
     fileName: '',
     suiteName: ctx.name,
     title: c.title,
     steps: c.steps,
     expectations: c.expectations,
+    codeSnippets: c.codeSnippets ?? [],
     metadata: c.metadata
-  }))}\n\n`;
-  if (c.metadata.priority) m += `**Prioridade:** ${mdText(c.metadata.priority)}\n\n`;
-  m += `**Status:** ${status}\n\n`;
-  m += '**Ações executadas:**\n\n';
+  });
+  const codeSnippets = c.codeSnippets?.length ? c.codeSnippets : [...c.steps, ...c.expectations];
+  let m = `#### Cenário: ${mdText(c.title)}\n\n`;
+  m += '| Item | Detalhe |\n';
+  m += '| --- | --- |\n';
+  m += `| Objetivo | ${mdText(c.metadata.description || naturalScenarioTitle(c.title))} |\n`;
+  m += `| Tela / funcionalidade | ${mdText(c.metadata.screen || fallbackFeature)} |\n`;
+  if (c.metadata.priority) m += `| Prioridade | ${mdText(c.metadata.priority)} |\n`;
+  m += `| Status | ${mdText(status)} |\n\n`;
+
+  m += '**Fluxo automatizado:**\n\n';
   if (steps.length) {
     for (const [index, step] of steps.entries()) m += `${index + 1}. ${mdText(step)}\n`;
   } else {
-    m += 'Nenhuma ação inicial foi identificada no corpo do cenário.\n';
+    m += 'O cenário não apresenta ações Detox inline; a execução parece estar concentrada em fluxos auxiliares ou validações.\n';
   }
-  m += '\n**Validação esperada:**\n\n';
+  m += '\n**Validações esperadas:**\n\n';
   if (expectations.length) {
     for (const [index, expectation] of expectations.entries()) m += `${index + 1}. ${mdText(expectation)}\n`;
   } else {
-    m += 'Nenhuma validação automática foi identificada no corpo do cenário.\n';
+    m += 'Nenhuma validação automática foi identificada diretamente no corpo do cenário.\n';
   }
-  m += '\n**Código extraído:**\n\n';
-  m += codeBlock([...c.steps, ...c.expectations]);
+  m += '\n**Trecho técnico extraído:**\n\n';
+  m += codeBlock(codeSnippets, language);
   return m;
 }
 
-function renderSuite(ctx: ITestContext, depth: number, junitIndex: JunitIndex): string {
+function renderSuite(ctx: ITestContext, depth: number, junitIndex: JunitIndex, language: string): string {
   let m = '';
   m += `${headingLevel(depth, 2)} **${mdText(ctx.name)}**\n\n`;
   if (ctx.testCases && ctx.testCases.length) {
     for (const c of ctx.testCases) {
-      m += renderScenarioCard(c, ctx, junitIndex);
+      m += renderScenarioCard(c, ctx, junitIndex, language);
     }
   } else if (ctx.tests.length) {
     for (const t of ctx.tests) {
@@ -593,7 +665,7 @@ function renderSuite(ctx: ITestContext, depth: number, junitIndex: JunitIndex): 
     }
   }
   for (const n of ctx.nested ?? []) {
-    m += renderSuite(n, depth + 1, junitIndex);
+    m += renderSuite(n, depth + 1, junitIndex, language);
   }
   return m;
 }
@@ -611,8 +683,9 @@ function renderFileSection(p: IParsedTestFile, junitIndex: JunitIndex): string {
     }
     m += '\n';
   }
+  const language = sourceCodeLanguage(p.sourceKind);
   for (const c of p.contexts) {
-    m += renderSuite(c, 0, junitIndex);
+    m += renderSuite(c, 0, junitIndex, language);
   }
   return m;
 }
@@ -623,7 +696,7 @@ function buildTechnicalSummary(
   stats: { spec: number; e2e: number; test: number; totalTestFiles: number; totalTests: number }
 ): string {
   const languages = Array.from(new Set(files.map((f) => sourceKindLabel(f.sourceKind)).filter((x) => x !== '-')));
-  let m = '## Resumo técnico\n\n';
+  let m = '## 7. Resumo técnico\n\n';
   m += `- Arquivos de teste: **${stats.totalTestFiles}**\n`;
   m += `- Testes (it / test) enumerados: **${stats.totalTests}**\n`;
   m += '- Framework: **Detox**\n';
@@ -657,7 +730,7 @@ function buildTechnicalReport(
   m += buildSelectorsTable(testRows);
   m += buildAutomatedAnalysis();
   if (allRows.length) m += buildExecutionReportJunit(allRows, metadata);
-  m += '## Detalhamento técnico dos cenários\n\n';
+  m += '## 12. Detalhamento técnico dos cenários\n\n';
   for (const f of files) {
     m += renderFileSection(f, junitIndex);
   }

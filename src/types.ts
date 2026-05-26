@@ -2,6 +2,7 @@ export interface ITestCaseDetail {
   title: string;
   steps: string[];
   expectations: string[];
+  codeSnippets?: string[];
   metadata: {
     description?: string;
     author?: string;

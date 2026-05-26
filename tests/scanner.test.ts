@@ -27,4 +27,23 @@ describe('findTestFiles', () => {
       fs.rmSync(dir, { recursive: true, force: true });
     }
   });
+
+  it('accepts Detox files with repeated JavaScript extensions', async () => {
+    const dir = tempProject();
+    try {
+      const e2e = path.join(dir, 'e2e');
+      fs.mkdirSync(e2e, { recursive: true });
+      fs.writeFileSync(path.join(e2e, 'signIn.e2e.js.js'), 'it("x", () => {})', 'utf8');
+      fs.writeFileSync(path.join(e2e, 'switchPowerMode.e2e.js.js'), 'it("y", () => {})', 'utf8');
+
+      const files = await findTestFiles(dir, 'e2e/**/*.{js,jsx,ts,tsx}');
+
+      expect(files.map((f) => path.basename(f))).toEqual([
+        'signIn.e2e.js.js',
+        'switchPowerMode.e2e.js.js'
+      ]);
+    } finally {
+      fs.rmSync(dir, { recursive: true, force: true });
+    }
+  });
 });

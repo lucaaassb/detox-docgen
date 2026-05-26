@@ -52,7 +52,7 @@ describe('markdown renderer', () => {
     expect(md).toContain('| **Versão**      | 1.2.3 |');
     expect(md).toContain('- Testes no JUnit: **1** (1 OK, 0 falha(s), 0 ignorado(s))');
     expect(md).toContain('#### Cenário: deve abrir a tela');
-    expect(md).toContain('**Status:** OK (2s)');
+    expect(md).toContain('| Status | OK (2s) |');
     expect(md).toContain('1. Preencher elemento "email" com "a@b.com".');
     expect(md).toContain('```ts\nawait element(by.id(\'email\')).typeText(\'a@b.com\')\nawait expect(element(by.id(\'homeScreen\'))).toBeVisible()\n```');
     expect(md).toContain('| `email` | `by.id` | `login.e2e.ts` |');
@@ -69,5 +69,73 @@ describe('markdown renderer', () => {
 
     expect(table).toContain('suite \\| pipe');
     expect(table).toContain('login \\| pipe');
+  });
+
+  it('uses professional fallback text instead of an empty-code placeholder', () => {
+    const noInlineCode: IParsedTestFile = {
+      ...parsed,
+      contexts: [
+        {
+          name: 'Shared flow',
+          tests: ['should sign in the test user'],
+          hooks: [],
+          testCases: [
+            {
+              title: 'should sign in the test user',
+              steps: [],
+              expectations: [],
+              metadata: {}
+            }
+          ],
+          nested: []
+        }
+      ],
+      its: ['should sign in the test user']
+    };
+
+    const md = buildTestDocumentation(
+      [noInlineCode],
+      [],
+      { spec: 0, e2e: 1, test: 0, totalTestFiles: 1, totalTests: 1 },
+      'mobile-app'
+    );
+
+    expect(md).not.toContain('_Nenhum código extraído._');
+    expect(md).toContain('Sem trecho de automação inline para exibir');
+  });
+
+  it('renders helper call snippets when a scenario delegates to shared flows', () => {
+    const helperFlow: IParsedTestFile = {
+      ...parsed,
+      sourceKind: 'javascript',
+      contexts: [
+        {
+          name: 'Shared flow',
+          tests: ['should switch to power mode'],
+          hooks: [],
+          testCases: [
+            {
+              title: 'should switch to power mode',
+              steps: ['await switchPowerMode()'],
+              expectations: [],
+              codeSnippets: ['await switchPowerMode();'],
+              metadata: {}
+            }
+          ],
+          nested: []
+        }
+      ],
+      its: ['should switch to power mode']
+    };
+
+    const md = buildTestDocumentation(
+      [helperFlow],
+      [],
+      { spec: 0, e2e: 1, test: 0, totalTestFiles: 1, totalTests: 1 },
+      'mobile-app'
+    );
+
+    expect(md).toContain('1. Executar fluxo auxiliar "switch power mode".');
+    expect(md).toContain('```js\nawait switchPowerMode();\n```');
   });
 });

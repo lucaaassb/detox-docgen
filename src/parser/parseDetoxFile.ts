@@ -44,55 +44,153 @@ function getStringArg(node: t.Expression | t.SpreadElement | t.JSXNamespacedName
   return '<<título dinâmico>>';
 }
 
+function compactCode(code: string): string {
+  return code.replace(/\s+/g, ' ').trim();
+}
+
+function trimLongCode(code: string, max: number = 700): string {
+  return code.length > max ? `${code.slice(0, max - 3)}...` : code;
+}
+
+function nodeCode(node: t.Node): string {
+  return generate(node, { comments: false, compact: false }).code.trim();
+}
+
+function statementCode(node: t.Node): string {
+  return trimLongCode(nodeCode(node));
+}
+
+function helperCallName(code: string): string | null {
+  const normalized = compactCode(code).replace(/^const\s+\w+\s*=\s*/, '');
+  const match = /^(?:await\s+)?([A-Za-z_$][\w$]*)\s*\(/.exec(normalized);
+  if (!match) return null;
+  const name = match[1];
+  if (
+    [
+      'describe',
+      'it',
+      'test',
+      'beforeAll',
+      'beforeEach',
+      'afterAll',
+      'afterEach',
+      'element',
+      'expect',
+      'waitFor',
+      'by',
+      'setTimeout',
+      'Promise',
+      'console'
+    ].includes(name)
+  ) {
+    return null;
+  }
+  return name;
+}
+
+function hasDetoxSignal(code: string): boolean {
+  return (
+    /\b(element|device|expect|waitFor|by)\b/.test(code) ||
+    /\.(tap|multiTap|typeText|replaceText|clearText|scroll|scrollTo|swipe|getAttributes)\s*\(/.test(code)
+  );
+}
+
 function shouldCaptureStep(code: string): boolean {
-  return /\b(element|device|expect|waitFor|by)\b/.test(code);
+  return hasDetoxSignal(code) || helperCallName(code) !== null;
+}
+
+function shouldCaptureCodeSnippet(code: string): boolean {
+  return hasDetoxSignal(code) || helperCallName(code) !== null;
+}
+
+function isExpectationCode(code: string): boolean {
+  return (
+    /\bexpect\s*\(/.test(code) ||
+    /\.(?:not\.)?toBeVisible|\.toBeNotVisible|\.toExist|\.toHaveText|\.toHaveLabel|\.toHaveValue/.test(code)
+  );
+}
+
+function isSelectorReferenceOnly(code: string): boolean {
+  return /^element\s*\(\s*by\./.test(compactCode(code));
+}
+
+function addUnique(out: string[], value: string): void {
+  const normalized = compactCode(value);
+  if (!normalized || out.includes(normalized)) return;
+  out.push(normalized);
 }
 
 function extractStepsFromBlock(
   body: t.BlockStatement | t.Expression
-): { steps: string[]; expectations: string[] } {
+): { steps: string[]; expectations: string[]; codeSnippets: string[] } {
   const steps: string[] = [];
   const exp: string[] = [];
+  const codeSnippets: string[] = [];
 
   const visitExpr = (e: t.Expression) => {
-    const code = generate(e, { comments: false, compact: false }).code;
+    const code = nodeCode(e);
     if (!shouldCaptureStep(code)) return;
-    const one = code.replace(/\s+/g, ' ').trim();
-    if (one.length > 500) {
-      steps.push(`${one.slice(0, 497)}...`);
-    } else if (/\bexpect\s*\(/.test(one) || /\.toBeVisible|\.toExist|\.toHaveText|\.toHaveLabel|not\./.test(one)) {
-      exp.push(one);
+    const one = trimLongCode(compactCode(code), 500);
+    if (isExpectationCode(one)) {
+      addUnique(exp, one);
+    } else if (!isSelectorReferenceOnly(one)) {
+      addUnique(steps, one);
+    }
+  };
+
+  const visitStatement = (st: t.Statement) => {
+    if (t.isExpressionStatement(st)) {
+      const code = statementCode(st);
+      if (shouldCaptureCodeSnippet(code)) addUnique(codeSnippets, code);
+      if (t.isExpression(st.expression)) visitExpr(st.expression);
+    } else if (t.isVariableDeclaration(st)) {
+      const meaningful = st.declarations.some((d) => d.init && shouldCaptureCodeSnippet(nodeCode(d.init)));
+      if (meaningful) addUnique(codeSnippets, statementCode(st));
+      for (const d of st.declarations) {
+        if (d.init && t.isExpression(d.init)) visitExpr(d.init);
+      }
+    } else if (t.isReturnStatement(st) && st.argument) {
+      const code = statementCode(st);
+      if (shouldCaptureCodeSnippet(code)) addUnique(codeSnippets, code);
+      if (t.isExpression(st.argument)) visitExpr(st.argument);
+    } else if (t.isTryStatement(st)) {
+      for (const inner of st.block.body) visitStatement(inner);
+      if (st.handler?.body) {
+        for (const inner of st.handler.body.body) visitStatement(inner);
+      }
+      if (st.finalizer) {
+        for (const inner of st.finalizer.body) visitStatement(inner);
+      }
+    } else if (t.isIfStatement(st)) {
+      visitBlockLike(st.consequent);
+      if (st.alternate) visitBlockLike(st.alternate);
+    } else if (
+      t.isForStatement(st) ||
+      t.isForInStatement(st) ||
+      t.isForOfStatement(st) ||
+      t.isWhileStatement(st) ||
+      t.isDoWhileStatement(st)
+    ) {
+      visitBlockLike(st.body);
+    }
+  };
+
+  const visitBlockLike = (node: t.Statement) => {
+    if (t.isBlockStatement(node)) {
+      for (const inner of node.body) visitStatement(inner);
     } else {
-      steps.push(one);
+      visitStatement(node);
     }
   };
 
   if (t.isBlockStatement(body)) {
-    for (const st of body.body) {
-      if (t.isExpressionStatement(st)) {
-        if (t.isCallExpression(st.expression) || t.isOptionalCallExpression(st.expression)) {
-          visitExpr(st.expression);
-        } else {
-          visitExpr(st.expression);
-        }
-      } else if (t.isVariableDeclaration(st)) {
-        for (const d of st.declarations) {
-          if (d.init) visitExpr(d.init as t.Expression);
-        }
-      } else if (t.isReturnStatement(st) && st.argument) {
-        visitExpr(st.argument as t.Expression);
-      } else if (t.isTryStatement(st) && t.isBlockStatement(st.block)) {
-        for (const inner of st.block.body) {
-          if (t.isExpressionStatement(inner) && t.isExpression(inner.expression)) {
-            visitExpr(inner.expression);
-          }
-        }
-      }
-    }
+    for (const st of body.body) visitStatement(st);
   } else {
+    const code = nodeCode(body);
+    if (shouldCaptureCodeSnippet(code)) addUnique(codeSnippets, code);
     visitExpr(body);
   }
-  return { steps, expectations: exp };
+  return { steps, expectations: exp, codeSnippets };
 }
 
 function getItCallback(
@@ -133,10 +231,16 @@ function extractHooks(
     if (!meta || isHookCallName(meta.root) === false) continue;
     const fn = getFirstFnArg(call);
     if (fn && t.isBlockStatement(fn.body)) {
-      const { steps } = extractStepsFromBlock(fn.body);
+      const { steps, expectations, codeSnippets } = extractStepsFromBlock(fn.body);
       hooks.push({
         type: meta.root as IHookInfo['type'],
-        summary: steps[0] ?? ''
+        summary: steps[0] ?? expectations[0] ?? codeSnippets[0] ?? ''
+      });
+    } else if (fn && t.isExpression(fn.body)) {
+      const { steps, expectations, codeSnippets } = extractStepsFromBlock(fn.body);
+      hooks.push({
+        type: meta.root as IHookInfo['type'],
+        summary: steps[0] ?? expectations[0] ?? codeSnippets[0] ?? ''
       });
     } else {
       hooks.push({ type: meta.root as IHookInfo['type'], summary: '' });
@@ -221,21 +325,25 @@ export function parseDetoxTestFile(absoluteFilePath: string, cwd: string = proce
         const cb = getItCallback(call);
         let steps: string[] = [];
         let expectations: string[] = [];
+        let codeSnippets: string[] = [];
         if (cb) {
           if (t.isBlockStatement(cb.body)) {
             const e = extractStepsFromBlock(cb.body);
             steps = e.steps;
             expectations = e.expectations;
+            codeSnippets = e.codeSnippets;
           } else {
             const e = extractStepsFromBlock(cb.body);
             steps = e.steps;
             expectations = e.expectations;
+            codeSnippets = e.codeSnippets;
           }
         }
         testCases.push({
           title,
           steps,
           expectations,
+          codeSnippets,
           metadata: itMeta
         });
       }
@@ -293,17 +401,19 @@ export function parseDetoxTestFile(absoluteFilePath: string, cwd: string = proce
       const cb = getItCallback(call);
       let steps: string[] = [];
       let expectations: string[] = [];
+      let codeSnippets: string[] = [];
       if (cb) {
         const e = t.isBlockStatement(cb.body)
           ? extractStepsFromBlock(cb.body)
           : extractStepsFromBlock(cb.body);
         steps = e.steps;
         expectations = e.expectations;
+        codeSnippets = e.codeSnippets;
       }
       contexts.push({
         name: firstContextName || 'Tests',
         tests: [title],
-        testCases: [{ title, steps, expectations, metadata: itMeta }],
+        testCases: [{ title, steps, expectations, codeSnippets, metadata: itMeta }],
         hooks: [],
         nested: []
       });

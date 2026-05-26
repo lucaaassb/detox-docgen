@@ -47,11 +47,15 @@ function normalizeTestCase(
   const title = canonicalReadableText(tc.title);
   const steps = tc.steps.map(trimCodeLine).filter((s) => s.length > 0);
   const expectations = tc.expectations.map(trimCodeLine).filter((s) => s.length > 0);
+  const codeSnippets = (tc.codeSnippets ?? [])
+    .map(trimCodeLine)
+    .filter((s) => s.length > 0);
   const metadata = normalizeMetadata(tc.metadata);
 
   if (
     steps.length === 0 &&
     expectations.length === 0 &&
+    codeSnippets.length === 0 &&
     !metadata.description
   ) {
     emptyStepWarnings.add(
@@ -59,7 +63,13 @@ function normalizeTestCase(
     );
   }
 
-  return { title, steps, expectations, metadata };
+  return {
+    title,
+    steps,
+    expectations,
+    ...(codeSnippets.length ? { codeSnippets } : {}),
+    metadata
+  };
 }
 
 /**

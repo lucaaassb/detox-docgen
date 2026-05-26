@@ -102,40 +102,72 @@ export function markdownToHtmlDocument(markdown: string, title: string): string 
   :root { color-scheme: light; }
   body {
     font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
-    line-height:1.5;
+    line-height:1.55;
     margin:0;
-    padding:0 40px 34px;
-    color:#243042;
-    background:#f5f7fb;
+    padding:0 42px 36px;
+    color:#27313f;
+    background:#f7f8fa;
     box-sizing:border-box;
   }
   *, *::before, *::after { box-sizing:inherit; }
   body > * { margin-left:0; margin-right:0; }
   h1 {
-    margin:0 -40px 26px;
-    padding:38px 40px 34px;
-    color:#fff;
-    background:linear-gradient(135deg, #123f6d 0%, #2563eb 52%, #13a39a 100%);
-    border-bottom:6px solid #f59e0b;
-    font-size:30px;
+    color:#183642;
+    font-size:24px;
+    line-height:1.2;
     letter-spacing:0;
+    margin:34px 0 14px;
+    padding:0 0 10px;
+    border-bottom:2px solid #b9c8cf;
+    page-break-before:always;
   }
-  h1 + p, h1 + p + p, h1 + p + p + p, h1 + p + p + p + p, h1 + p + p + p + p + p, h1 + p + p + p + p + p + p, h1 + p + p + p + p + p + p + p {
+  h1:first-of-type {
+    margin:0 -42px 28px;
+    padding:42px 42px 36px;
+    color:#fff;
+    background:#183642;
+    border-bottom:6px solid #d69e2e;
+    font-size:30px;
+    page-break-before:auto;
+  }
+  h1:first-of-type + p,
+  h1:first-of-type + p + p,
+  h1:first-of-type + p + p + p,
+  h1:first-of-type + p + p + p + p,
+  h1:first-of-type + p + p + p + p + p,
+  h1:first-of-type + p + p + p + p + p + p,
+  h1:first-of-type + p + p + p + p + p + p + p {
     background:#ffffff;
-    border-left:4px solid #2563eb;
+    border-left:4px solid #2f7d7e;
     margin-top:0;
     margin-bottom:8px;
     padding:8px 12px;
-    box-shadow:0 1px 2px rgba(18,63,109,.08);
+    box-shadow:0 1px 2px rgba(24,54,66,.08);
   }
   h2 {
-    color:#123f6d;
-    border-left:6px solid #13a39a;
-    padding:8px 0 8px 14px;
-    margin:30px 0 12px;
-    background:#e9f5ff;
+    color:#183642;
+    border-left:5px solid #2f7d7e;
+    padding:6px 0 6px 12px;
+    margin:28px 0 12px;
+    background:#edf5f4;
+    font-size:20px;
   }
-  h3, h4, h5, h6 { color:#1f4f7a; margin-top:20px; }
+  h3 {
+    color:#24465a;
+    margin:22px 0 10px;
+    padding-bottom:5px;
+    border-bottom:1px solid #d7dee3;
+    font-size:17px;
+  }
+  h4, h5, h6 {
+    color:#27313f;
+    margin:20px 0 8px;
+    font-size:15px;
+  }
+  h4 {
+    border-left:4px solid #d69e2e;
+    padding-left:10px;
+  }
   table {
     width:100%;
     border-collapse:separate;
@@ -143,26 +175,26 @@ export function markdownToHtmlDocument(markdown: string, title: string): string 
     margin:12px 0 20px;
     font-size:12.5px;
     background:#fff;
-    border:1px solid #d7e2ef;
-    box-shadow:0 1px 3px rgba(18,63,109,.08);
+    border:1px solid #d7dee3;
+    box-shadow:0 1px 3px rgba(24,54,66,.07);
   }
-  th, td { border-bottom:1px solid #d7e2ef; padding:8px 10px; text-align:left; vertical-align:top; }
-  th { background:#123f6d; color:#fff; font-weight:700; }
-  tr:nth-child(even) td { background:#f8fbff; }
+  th, td { border-bottom:1px solid #d7dee3; padding:8px 10px; text-align:left; vertical-align:top; }
+  th { background:#24465a; color:#fff; font-weight:700; }
+  tr:nth-child(even) td { background:#f9fbfb; }
   tr:last-child td { border-bottom:0; }
   code {
     display:inline-block;
     max-width:100%;
     overflow-wrap:anywhere;
-    background:#eef6ff;
-    border:1px solid #9fc8ef;
-    border-left:4px solid #2563eb;
+    background:#f3f6f7;
+    border:1px solid #cfd8dd;
+    border-left:4px solid #2f7d7e;
     border-radius:4px;
     padding:2px 6px;
     font-family: Consolas, 'Courier New', monospace;
     font-size: 12px;
     line-height:1.35;
-    color:#143f63;
+    color:#183642;
   }
   pre {
     margin:8px 0 18px;
@@ -174,15 +206,16 @@ export function markdownToHtmlDocument(markdown: string, title: string): string 
     display:block;
     width:100%;
     padding:10px 12px;
-    border-left:5px solid #2563eb;
+    background:#fbfcfc;
+    border-left:5px solid #2f7d7e;
     white-space:pre-wrap;
   }
   li { margin:4px 0; }
   p { margin-top:8px; margin-bottom:8px; }
-  hr { border:0; border-top:2px solid #f59e0b; margin:26px 0; }
+  hr { border:0; border-top:2px solid #d69e2e; margin:26px 0; }
   @media print {
     body { background:#fff; }
-    h1, h2, h3 { page-break-after: avoid; }
+    h1, h2, h3, h4 { page-break-after: avoid; }
     table, ul { page-break-inside: avoid; }
   }`;
 
