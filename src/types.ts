@@ -46,6 +46,12 @@ export interface IParsedTestFile {
   sourceKind?: SourceKind;
 }
 
+export type DetoxDocgenReportLanguage = 'pt-BR' | 'en';
+
+export type DetoxDocgenReportTextOverrides = Record<string, string>;
+
+export type DetoxDocgenOutputFormat = 'md' | 'mdx';
+
 export type DetoxDocgenUserConfig = {
   testGlob?: string | string[];
   outputFile?: string;
@@ -55,6 +61,15 @@ export type DetoxDocgenUserConfig = {
   version?: string;
   responsible?: string;
   environment?: string;
+  reportLanguage?: DetoxDocgenReportLanguage;
+  reportTextOverrides?: DetoxDocgenReportTextOverrides;
+  outputFormat?: DetoxDocgenOutputFormat;
 };
 
 export type DetoxDocgenResolvedConfig = Required<DetoxDocgenUserConfig>;
+
+export type DetoxDocgenGenerateOptions = {
+  reportLanguage?: DetoxDocgenReportLanguage;
+  reportTextOverrides?: DetoxDocgenReportTextOverrides;
+  outputFormat?: DetoxDocgenOutputFormat;
+};

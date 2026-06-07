@@ -1,6 +1,13 @@
 import path from 'path';
 import fs from 'fs';
-import { DetoxDocgenResolvedConfig, DetoxDocgenUserConfig } from './types';
+import {
+  DetoxDocgenOutputFormat,
+  DetoxDocgenReportLanguage,
+  DetoxDocgenReportTextOverrides,
+  DetoxDocgenResolvedConfig,
+  DetoxDocgenUserConfig
+} from './types';
+import { DEFAULT_MARKDOWN_OUTPUT_FILE } from './outputFormat';
 
 const CANDIDATES = [
   'detox-docgen.config.js',
@@ -13,13 +20,16 @@ const DEFAULT: DetoxDocgenResolvedConfig = {
   testGlob: [
     'e2e/**/*.{js,jsx,ts,tsx}'
   ],
-  outputFile: 'spec-docs.md',
+  outputFile: DEFAULT_MARKDOWN_OUTPUT_FILE,
   folderOutputDir: 'spec-docs-folder',
   pdfOutputDir: 'spec-docs-pdf',
   projectName: '',
   version: '',
   responsible: '',
-  environment: ''
+  environment: '',
+  reportLanguage: 'pt-BR',
+  reportTextOverrides: {},
+  outputFormat: 'md'
 };
 
 function readPackageValue(workingDir: string, key: 'name' | 'version'): string {
@@ -36,6 +46,29 @@ function readPackageValue(workingDir: string, key: 'name' | 'version'): string {
 
 function valueOrDefault(value: string | undefined, fallback: string): string {
   return value && value.trim() ? value.trim() : fallback;
+}
+
+function reportLanguageOrDefault(
+  value: DetoxDocgenReportLanguage | undefined,
+  fallback: DetoxDocgenReportLanguage
+): DetoxDocgenReportLanguage {
+  return value === 'en' || value === 'pt-BR' ? value : fallback;
+}
+
+function reportTextOverridesOrDefault(
+  value: DetoxDocgenReportTextOverrides | undefined
+): DetoxDocgenReportTextOverrides {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) return {};
+  return Object.fromEntries(
+    Object.entries(value).filter((entry): entry is [string, string] => typeof entry[1] === 'string')
+  );
+}
+
+function outputFormatOrDefault(
+  value: DetoxDocgenOutputFormat | undefined,
+  fallback: DetoxDocgenOutputFormat
+): DetoxDocgenOutputFormat {
+  return value === 'mdx' || value === 'md' ? value : fallback;
 }
 
 export function loadUserConfig(workingDir: string): DetoxDocgenResolvedConfig {
@@ -76,7 +109,10 @@ export function loadUserConfig(workingDir: string): DetoxDocgenResolvedConfig {
         projectName: valueOrDefault(c.projectName, baseDefaults.projectName),
         version: valueOrDefault(c.version, baseDefaults.version),
         responsible: valueOrDefault(c.responsible, baseDefaults.responsible),
-        environment: valueOrDefault(c.environment, baseDefaults.environment)
+        environment: valueOrDefault(c.environment, baseDefaults.environment),
+        reportLanguage: reportLanguageOrDefault(c.reportLanguage, baseDefaults.reportLanguage),
+        reportTextOverrides: reportTextOverridesOrDefault(c.reportTextOverrides),
+        outputFormat: outputFormatOrDefault(c.outputFormat, baseDefaults.outputFormat)
       };
     } catch {
   

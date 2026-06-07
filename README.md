@@ -15,18 +15,25 @@ npm install --save-dev detox-docgen
 No diretório do projeto (onde vivem `e2e/`, `package.json`, etc.):
 
 ```bash
-# Um único spec-docs.md
+# Um único spec-docs.md ou spec-docs.mdx
 npx detox-docgen
 npx detox-docgen /caminho/para/app
+npx detox-docgen --language en
+npx detox-docgen --language pt-BR
+npx detox-docgen --format mdx
 
-# Um .md por pasta: spec-docs-folder/
+# Um .md ou .mdx por pasta: spec-docs-folder/
 npx detox-docgen-folder
+npx detox-docgen-folder --language en
+npx detox-docgen-folder --format mdx
 
 # PDF único: spec-docs.pdf
 npx detox-docgen-pdf
+npx detox-docgen-pdf --language en
 
 # Vários PDFs: spec-docs-pdf/
 npx detox-docgen-pdf-folder
+npx detox-docgen-pdf-folder --language en
 ```
 
 ### Scripts (package.json do teu app)
@@ -57,9 +64,57 @@ await generateSingleDoc('/caminho/do/projeto');
 
 ## Configuração (opcional)
 
-- Arquivo opcional: `detox-docgen.config.cjs` ou `.detox-docgenrc.cjs` com `module.exports = { testGlob, outputFile, folderOutputDir, pdfOutputDir, projectName, version, responsible, environment }`. Por omissão, o `testGlob` inclui `e2e/**/*.{js,jsx,ts,tsx}` e arquivos cujo nome segue `*.e2e.*`, `*.spec.*` ou `*.test.*`.
+- Arquivo opcional: `detox-docgen.config.cjs` ou `.detox-docgenrc.cjs` com `module.exports = { testGlob, outputFile, folderOutputDir, pdfOutputDir, projectName, version, responsible, environment, reportLanguage, reportTextOverrides, outputFormat }`. Por omissão, o `testGlob` inclui `e2e/**/*.{js,jsx,ts,tsx}` e arquivos cujo nome segue `*.e2e.*`, `*.spec.*` ou `*.test.*`.
 - `projectName` e `version` podem ser inferidos do `package.json`; `responsible` e `environment` enriquecem o cabeçalho do relatório para uso por QA/CI.
 - `.detox-docgenignore` — padrão estilo `.gitignore` em caminhos relativos.
+
+### Idioma e textos do relatório
+
+Por padrão, os textos gerados pelo relatório ficam em português. O usuário pode escolher o idioma na execução:
+
+```bash
+npx detox-docgen --language en
+npx detox-docgen --language pt-BR
+```
+
+A opção `--language` também funciona nos comandos `detox-docgen-folder`, `detox-docgen-pdf` e `detox-docgen-pdf-folder`.
+
+Se quiser deixar um idioma fixo sem precisar passar a flag, crie um arquivo de configuração na raiz do projeto:
+
+```js
+// detox-docgen.config.cjs
+module.exports = {
+  reportLanguage: 'en'
+};
+```
+
+Também é possível sobrescrever só partes específicas da casca textual do relatório, sem alterar nomes de testes, `describe`, `@description`, `@screen` ou seletores vindos do código:
+
+```js
+module.exports = {
+  reportLanguage: 'en',
+  outputFormat: 'mdx',
+  reportTextOverrides: {
+    coverTitle: 'QA Evidence',
+    scenarioLabel: 'Case'
+  }
+};
+```
+
+### Markdown ou MDX
+
+Por padrão, a documentação é gerada em Markdown (`.md`). Para gerar arquivos com extensão MDX:
+
+```bash
+npx detox-docgen --format mdx
+npx detox-docgen-folder --format mdx
+```
+
+O conteúdo gerado continua sendo Markdown compatível com MDX; a opção muda o formato de saída para `.mdx`. Também é possível combinar idioma e formato:
+
+```bash
+npx detox-docgen --language en --format mdx
+```
 
 ## JUnit (relatório de execução)
 

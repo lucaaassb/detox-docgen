@@ -62,6 +62,48 @@ describe('markdown renderer', () => {
     expect(md).not.toContain('## Sumário');
   });
 
+  it('renders report chrome in English without translating test content', () => {
+    const md = buildTestDocumentation(
+      [parsed],
+      [{ name: 'deve abrir a tela', classname: 'Login', timeSec: 2.4, state: 'passed' }],
+      { spec: 0, e2e: 1, test: 0, totalTestFiles: 1, totalTests: 1 },
+      {
+        projectName: 'mobile-app',
+        reportLanguage: 'en'
+      }
+    );
+
+    expect(md).toContain('# Automated E2E Test Documentation Report');
+    expect(md).toContain('## 1. Executive summary');
+    expect(md).toContain('#### Scenario: deve abrir a tela');
+    expect(md).toContain('| Objective | deve abrir a tela. |');
+    expect(md).toContain('| Status | OK (2s) |');
+    expect(md).toContain('1. Fill element "email" with "a@b.com".');
+    expect(md).toContain('1. element "home screen" should be visible.');
+    expect(md).toContain('| **Version**      | - |');
+    expect(md).not.toContain('#### Cenário:');
+  });
+
+  it('allows report text overrides for static labels', () => {
+    const md = buildTestDocumentation(
+      [parsed],
+      [],
+      { spec: 0, e2e: 1, test: 0, totalTestFiles: 1, totalTests: 1 },
+      {
+        projectName: 'mobile-app',
+        reportLanguage: 'en',
+        reportTextOverrides: {
+          coverTitle: 'QA Evidence',
+          scenarioLabel: 'Case'
+        }
+      }
+    );
+
+    expect(md).toContain('# QA Evidence');
+    expect(md).toContain('#### Case: deve abrir a tela');
+    expect(md).not.toContain('#### Scenario: deve abrir a tela');
+  });
+
   it('escapes table pipes from JUnit values', () => {
     const table = buildJunitTable([
       { name: 'login | pipe', classname: 'suite | pipe', timeSec: 1, state: 'failed', message: 'x' }

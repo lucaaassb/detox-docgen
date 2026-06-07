@@ -46,4 +46,23 @@ describe('loadUserConfig', () => {
       fs.rmSync(dir, { recursive: true, force: true });
     }
   });
+
+  it('loads report language and static text overrides', () => {
+    const dir = tempProject();
+    try {
+      fs.writeFileSync(
+        path.join(dir, 'detox-docgen.config.cjs'),
+        "module.exports = { reportLanguage: 'en', reportTextOverrides: { coverTitle: 'QA Evidence' }, outputFormat: 'mdx' };",
+        'utf8'
+      );
+
+      const config = loadUserConfig(dir);
+
+      expect(config.reportLanguage).toBe('en');
+      expect(config.reportTextOverrides.coverTitle).toBe('QA Evidence');
+      expect(config.outputFormat).toBe('mdx');
+    } finally {
+      fs.rmSync(dir, { recursive: true, force: true });
+    }
+  });
 });

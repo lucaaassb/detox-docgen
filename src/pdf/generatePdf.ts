@@ -4,7 +4,7 @@ import { findTestFiles } from '../scanner/findTestFiles';
 import { loadUserConfig } from '../config';
 import { parseDetoxTestFile, sumFileStats } from '../parser/parseDetoxFile';
 import { normalizeParsed } from '../normalizer';
-import { IParsedTestFile } from '../types';
+import { DetoxDocgenGenerateOptions, IParsedTestFile } from '../types';
 import { markdownToHtmlDocument, getPdfFileNameForDir } from './htmlFromParsed';
 import { ensureDirSync } from '../scanner/findTestFiles';
 import { buildTestDocumentation } from '../renderer/markdown';
@@ -23,12 +23,26 @@ async function loadJunitRows(workingDir: string): Promise<IFlattenedJunit[]> {
   return rows;
 }
 
+function applyGenerateOptions(
+  config: ReturnType<typeof loadUserConfig>,
+  options: DetoxDocgenGenerateOptions = {}
+): ReturnType<typeof loadUserConfig> {
+  return {
+    ...config,
+    reportLanguage: options.reportLanguage ?? config.reportLanguage,
+    reportTextOverrides: options.reportTextOverrides ?? config.reportTextOverrides,
+    outputFormat: options.outputFormat ?? config.outputFormat
+  };
+}
+
 function reportMetadata(config: ReturnType<typeof loadUserConfig>, workingDir: string) {
   return {
     projectName: config.projectName || path.basename(workingDir),
     version: config.version,
     responsible: config.responsible,
-    environment: config.environment
+    environment: config.environment,
+    reportLanguage: config.reportLanguage,
+    reportTextOverrides: config.reportTextOverrides
   };
 }
 
@@ -53,9 +67,16 @@ function buildMarkdownReport(
   );
 }
 
-export async function generateSinglePDF(workingDir: string = process.cwd()): Promise<void> {
+function pdfDocumentTitle(config: ReturnType<typeof loadUserConfig>): string {
+  return config.reportLanguage === 'en' ? 'Detox E2E - Documentation' : 'Detox E2E - Documentação';
+}
+
+export async function generateSinglePDF(
+  workingDir: string = process.cwd(),
+  options: DetoxDocgenGenerateOptions = {}
+): Promise<void> {
   workingDir = path.resolve(workingDir);
-  const config = loadUserConfig(workingDir);
+  const config = applyGenerateOptions(loadUserConfig(workingDir), options);
   const originalCwd = process.cwd();
   try {
     process.chdir(workingDir);
@@ -68,7 +89,7 @@ export async function generateSinglePDF(workingDir: string = process.cwd()): Pro
       normalizeParsed(parseDetoxTestFile(p, workingDir))
     );
     const markdown = buildMarkdownReport(parsed, await loadJunitRows(workingDir), reportMetadata(config, workingDir));
-    const html = markdownToHtmlDocument(markdown, 'Detox E2E - Documentação');
+    const html = markdownToHtmlDocument(markdown, pdfDocumentTitle(config));
     const browser = await puppeteer.launch({
       headless: true,
       args: ['--no-sandbox', '--disable-setuid-sandbox']
@@ -91,9 +112,12 @@ export async function generateSinglePDF(workingDir: string = process.cwd()): Pro
   }
 }
 
-export async function generateFolderPDFs(workingDir: string = process.cwd()): Promise<void> {
+export async function generateFolderPDFs(
+  workingDir: string = process.cwd(),
+  options: DetoxDocgenGenerateOptions = {}
+): Promise<void> {
   workingDir = path.resolve(workingDir);
-  const config = loadUserConfig(workingDir);
+  const config = applyGenerateOptions(loadUserConfig(workingDir), options);
   const originalCwd = process.cwd();
   try {
     process.chdir(workingDir);
@@ -122,7 +146,7 @@ export async function generateFolderPDFs(workingDir: string = process.cwd()): Pr
         ...metadata,
         projectName: display
       });
-      const html = markdownToHtmlDocument(markdown, 'Detox E2E - Documentação');
+      const html = markdownToHtmlDocument(markdown, pdfDocumentTitle(config));
       const browser = await puppeteer.launch({
         headless: true,
         args: ['--no-sandbox', '--disable-setuid-sandbox']

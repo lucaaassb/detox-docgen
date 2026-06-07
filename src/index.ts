@@ -7,11 +7,27 @@ import { normalizeParsed } from './normalizer';
 import { buildTestDocumentation } from './renderer/markdown';
 import { findJunitFiles, parseJunitFile } from './execution/parseJunit';
 import { IFlattenedJunit } from './execution/types';
-import { IParsedTestFile } from './types';
+import { DetoxDocgenGenerateOptions, IParsedTestFile } from './types';
 import { generateSinglePDF, generateFolderPDFs } from './pdf/generatePdf';
+import { folderOutputFileForDir, outputFileForFormat } from './outputFormat';
 
-export async function generateSingleDoc(workingDir: string = process.cwd()): Promise<void> {
-  const config = loadUserConfig(workingDir);
+function applyGenerateOptions(
+  config: ReturnType<typeof loadUserConfig>,
+  options: DetoxDocgenGenerateOptions = {}
+): ReturnType<typeof loadUserConfig> {
+  return {
+    ...config,
+    reportLanguage: options.reportLanguage ?? config.reportLanguage,
+    reportTextOverrides: options.reportTextOverrides ?? config.reportTextOverrides,
+    outputFormat: options.outputFormat ?? config.outputFormat
+  };
+}
+
+export async function generateSingleDoc(
+  workingDir: string = process.cwd(),
+  options: DetoxDocgenGenerateOptions = {}
+): Promise<void> {
+  const config = applyGenerateOptions(loadUserConfig(workingDir), options);
   const testFiles = await findTestFiles(workingDir, config.testGlob);
   if (testFiles.length === 0) {
     console.log('Nenhum arquivo de teste Detox encontrado com os padrões configurados.');
@@ -46,12 +62,15 @@ export async function generateSingleDoc(workingDir: string = process.cwd()): Pro
       projectName,
       version: config.version,
       responsible: config.responsible,
-      environment: config.environment
+      environment: config.environment,
+      reportLanguage: config.reportLanguage,
+      reportTextOverrides: config.reportTextOverrides
     }
   );
-  const out = path.join(workingDir, config.outputFile);
+  const outputFile = outputFileForFormat(config.outputFile, config.outputFormat);
+  const out = path.join(workingDir, outputFile);
   fs.writeFileSync(out, md, 'utf8');
-  console.log(`✅ ${config.outputFile} gerado.`);
+  console.log(`✅ ${outputFile} gerado.`);
   console.log(
     `Arquivos: ${testFiles.length}, testes: ${totalTests} (e2e:${statsAgg.e2e} spec:${statsAgg.spec} test:${statsAgg.test})`
   );
@@ -60,8 +79,11 @@ export async function generateSingleDoc(workingDir: string = process.cwd()): Pro
   }
 }
 
-export async function generateFolderDocs(workingDir: string = process.cwd()): Promise<void> {
-  const config = loadUserConfig(workingDir);
+export async function generateFolderDocs(
+  workingDir: string = process.cwd(),
+  options: DetoxDocgenGenerateOptions = {}
+): Promise<void> {
+  const config = applyGenerateOptions(loadUserConfig(workingDir), options);
   const testFiles = await findTestFiles(workingDir, config.testGlob);
   if (testFiles.length === 0) {
     console.log('Nenhum arquivo de teste Detox encontrado.');
@@ -106,10 +128,12 @@ export async function generateFolderDocs(workingDir: string = process.cwd()): Pr
         projectName,
         version: config.version,
         responsible: config.responsible,
-        environment: config.environment
+        environment: config.environment,
+        reportLanguage: config.reportLanguage,
+        reportTextOverrides: config.reportTextOverrides
       }
     );
-    const fileName = d === 'root' ? 'root.md' : `${d.replace(/[/\\]+/g, '-')}.md`;
+    const fileName = folderOutputFileForDir(d, config.outputFormat);
     fs.writeFileSync(path.join(outDir, fileName), md, 'utf8');
   }
   console.log(`✅ Documentação por pasta em ${outDir} (${byDir.size} arquivo(s)).`);
