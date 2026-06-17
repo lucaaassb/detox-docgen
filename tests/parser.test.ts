@@ -2,13 +2,26 @@ import path from 'path';
 import fs from 'fs';
 import os from 'os';
 import { describe, it, expect } from 'vitest';
-import { parseDetoxTestFile } from '../src/parser/parseDetoxFile';
+import { normalizeParsed } from '../src/normalizer';
+import { parseDetoxTestFile, sumFileStats } from '../src/parser/parseDetoxFile';
 
-const FIX = path.join(__dirname, 'fixtures', 'e2e', 'login.e2e.ts');
+const FIXTURE_ROOT = path.join(__dirname, 'fixtures');
+const E2E_FIXTURES = path.join(FIXTURE_ROOT, 'e2e');
+const FIX = path.join(E2E_FIXTURES, 'login.e2e.ts');
+const EXPECTED_FIXTURE_FILES = [
+  'acessibilidade.e2e.tsx',
+  'fluxosAvancados.e2e.ts',
+  'home.e2e.ts',
+  'login.e2e.ts',
+  'onboarding.e2e.ts',
+  'perfil.test.js',
+  'smoke.e2e.ts',
+  'transferencias.spec.ts'
+];
 
 describe('parseDetoxTestFile', () => {
   it('extracts describe, hooks and it with steps', () => {
-    const p = parseDetoxTestFile(FIX, path.join(__dirname, 'fixtures'));
+    const p = parseDetoxTestFile(FIX, FIXTURE_ROOT);
     expect(p.fileName).toBe('login.e2e.ts');
     expect(p.describe).toBe('Login');
     expect(p.its.length).toBe(10);
@@ -22,6 +35,30 @@ describe('parseDetoxTestFile', () => {
     expect(tc?.title).toBe('deve autenticar usuário com credenciais válidas');
     expect((tc?.steps || []).length).toBeGreaterThan(0);
     expect((tc?.expectations || []).length).toBeGreaterThan(0);
+  });
+
+  it('parses the expanded Detox fixture corpus', () => {
+    const parsed = fs
+      .readdirSync(E2E_FIXTURES)
+      .filter((file) => /\.(?:e2e|spec|test)\.[jt]sx?$/.test(file))
+      .sort()
+      .map((file) => normalizeParsed(parseDetoxTestFile(path.join(E2E_FIXTURES, file), FIXTURE_ROOT)));
+
+    expect(parsed.map((file) => file.fileName)).toEqual(EXPECTED_FIXTURE_FILES);
+    expect(parsed.reduce((total, file) => total + file.its.length, 0)).toBe(66);
+    expect(sumFileStats(parsed)).toEqual({ e2e: 6, spec: 1, test: 1 });
+
+    const tsxFixture = parsed.find((file) => file.fileName === 'acessibilidade.e2e.tsx');
+    expect(tsxFixture?.sourceKind).toBe('tsx');
+    expect(tsxFixture?.its).toHaveLength(7);
+
+    const topLevelFixture = parsed.find((file) => file.fileName === 'smoke.e2e.ts');
+    expect(topLevelFixture?.describe).toBe('N/A');
+    expect(topLevelFixture?.contexts).toHaveLength(4);
+
+    const specFixture = parsed.find((file) => file.fileName === 'transferencias.spec.ts');
+    expect(specFixture?.its).toContain('deve confirmar transferência com biometria');
+    expect(specFixture?.fileStats).toEqual({ e2e: 0, spec: 1, test: 0 });
   });
 
   it('keeps helper calls and expression-bodied hooks as technical snippets', () => {

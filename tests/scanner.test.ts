@@ -4,6 +4,8 @@ import path from 'path';
 import { describe, expect, it } from 'vitest';
 import { findTestFiles } from '../src/scanner/findTestFiles';
 
+const FIXTURE_ROOT = path.join(__dirname, 'fixtures');
+
 function tempProject(): string {
   return fs.mkdtempSync(path.join(os.tmpdir(), 'detox-docgen-scanner-'));
 }
@@ -45,5 +47,20 @@ describe('findTestFiles', () => {
     } finally {
       fs.rmSync(dir, { recursive: true, force: true });
     }
+  });
+
+  it('discovers the expanded fixture corpus across e2e, spec, test and tsx files', async () => {
+    const files = await findTestFiles(FIXTURE_ROOT, 'e2e/**/*.{js,jsx,ts,tsx}');
+
+    expect(files.map((f) => path.basename(f))).toEqual([
+      'acessibilidade.e2e.tsx',
+      'fluxosAvancados.e2e.ts',
+      'home.e2e.ts',
+      'login.e2e.ts',
+      'onboarding.e2e.ts',
+      'perfil.test.js',
+      'smoke.e2e.ts',
+      'transferencias.spec.ts'
+    ]);
   });
 });
