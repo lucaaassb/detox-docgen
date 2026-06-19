@@ -10,30 +10,77 @@ O **normalizador** (`src/normalizer/`) transforma o resultado do parser num mode
 npm install --save-dev detox-docgen
 ```
 
-## Utilização (CLI)
+## Gerando relatórios (CLI)
 
-No diretório do projeto (onde vivem `e2e/`, `package.json`, etc.):
+Execute os comandos na raiz do projeto que contém os testes Detox. Se nenhum
+diretório for informado, a CLI usa o diretório atual (`cwd`). Por padrão, a
+ferramenta procura arquivos em `e2e/**/*.{js,jsx,ts,tsx}` e mantém apenas nomes
+no padrão `*.e2e.*`, `*.spec.*` ou `*.test.*`.
+
+### Relatório único em Markdown ou MDX
 
 ```bash
-# Um único spec-docs.md ou spec-docs.mdx
+# Gera spec-docs.md
 npx detox-docgen
-npx detox-docgen /caminho/para/app
-npx detox-docgen --language en
-npx detox-docgen --language pt-BR
+npx detox-docgen --format md
+
+# Gera spec-docs.mdx
 npx detox-docgen --format mdx
 
-# Um .md ou .mdx por pasta: spec-docs-folder/
+# Também é possível apontar outro diretório de projeto
+npx detox-docgen /caminho/para/app --format mdx
+```
+
+### Relatórios separados por pasta
+
+```bash
+# Gera arquivos .md em spec-docs-folder/
 npx detox-docgen-folder
-npx detox-docgen-folder --language en
+
+# Gera arquivos .mdx em spec-docs-folder/
 npx detox-docgen-folder --format mdx
+```
 
-# PDF único: spec-docs.pdf
+### Relatórios em PDF
+
+```bash
+# Gera spec-docs.pdf
 npx detox-docgen-pdf
-npx detox-docgen-pdf --language en
 
-# Vários PDFs: spec-docs-pdf/
+# Gera um PDF por pasta em spec-docs-pdf/
 npx detox-docgen-pdf-folder
+
+# Também aceita outro diretório de projeto
+npx detox-docgen-pdf /caminho/para/app
+```
+
+### Idioma do relatório
+
+```bash
+npx detox-docgen --language pt-BR
+npx detox-docgen --language en
+npx detox-docgen-folder --language en
+npx detox-docgen-pdf --language en
 npx detox-docgen-pdf-folder --language en
+```
+
+### Gerar exemplos neste repositório
+
+Os specs de exemplo deste pacote ficam em `tests/fixtures/e2e`, então o
+diretório usado nos comandos é `tests/fixtures`:
+
+```bash
+npm install
+npm run build
+
+# Gera tests/fixtures/spec-docs.md
+node dist/cli.js tests/fixtures --format md
+
+# Gera tests/fixtures/spec-docs.mdx
+node dist/cli.js tests/fixtures --format mdx
+
+# Gera tests/fixtures/spec-docs.pdf
+node dist/pdf-cli.js tests/fixtures
 ```
 
 ### Scripts (package.json do teu app)
@@ -64,8 +111,10 @@ await generateSingleDoc('/caminho/do/projeto');
 
 ## Configuração (opcional)
 
-- Arquivo opcional: `detox-docgen.config.cjs` ou `.detox-docgenrc.cjs` com `module.exports = { testGlob, outputFile, folderOutputDir, pdfOutputDir, projectName, version, responsible, environment, reportLanguage, reportTextOverrides, outputFormat }`. Por omissão, o `testGlob` inclui `e2e/**/*.{js,jsx,ts,tsx}` e arquivos cujo nome segue `*.e2e.*`, `*.spec.*` ou `*.test.*`.
+- Arquivo opcional: `detox-docgen.config.js`, `detox-docgen.config.cjs`, `.detox-docgenrc.js` ou `.detox-docgenrc.cjs` com `module.exports = { testGlob, outputFile, folderOutputDir, pdfOutputDir, projectName, version, responsible, environment, reportLanguage, reportTextOverrides, outputFormat }`.
+- Por omissão, o `testGlob` varre `e2e/**/*.{js,jsx,ts,tsx}`. Depois disso, a ferramenta mantém apenas arquivos cujo nome segue `*.e2e.*`, `*.spec.*` ou `*.test.*`. Se os testes estiverem fora de `e2e/`, configure `testGlob`.
 - `projectName` e `version` podem ser inferidos do `package.json`; `responsible` e `environment` enriquecem o cabeçalho do relatório para uso por QA/CI.
+- Se `outputFile` for customizado, ele é usado literalmente. A troca automática entre `spec-docs.md` e `spec-docs.mdx` acontece quando o nome padrão é mantido.
 - `.detox-docgenignore` — padrão estilo `.gitignore` em caminhos relativos.
 
 ### Idioma e textos do relatório
